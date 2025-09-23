@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-"""
-github_ripper.py
+"""github_ripper.py
 
 Given a GitHub repo URL, download the repository contents (zip archive),
 extract into a local directory, remove any embedded .git, initialize a new
