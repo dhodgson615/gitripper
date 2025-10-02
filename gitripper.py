@@ -1,20 +1,7 @@
 from __future__ import annotations
 
-Features:
- - Accepts many GitHub URL formats (https, ssh, git@)
- - Optional branch/ref specification
- - GitHub token support for private repos
- - Optional git author name/email and remote origin
-"""
-
-import argparse
-import os
-import re
-import shutil
-import subprocess
-import sys
-import tempfile
-import zipfile
+from argparse import ArgumentParser
+from os import environ, walk
 from pathlib import Path
 from typing import Optional, Tuple
 
