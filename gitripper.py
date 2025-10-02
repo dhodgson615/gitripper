@@ -9,9 +9,7 @@ from subprocess import DEVNULL, run
 from sys import exit, stderr
 from tempfile import TemporaryDirectory
 from typing import Optional, Tuple
-
-try:
-    import requests
+from zipfile import ZipFile
 
 except ImportError:
     print("Package 'requests' not found. Attempting to install...")
