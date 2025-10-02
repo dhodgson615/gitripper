@@ -383,6 +383,11 @@ def test_main_dest_exists_force_rm_file_fails(
     args = MagicMock(url="https://github.com/u/r", force=True, dest="somefile")
     mock_parse_args.return_value = args
     mock_parse_url.return_value = ("u", "r")
+    mock_isdir.return_value = False
+    mock_exists.return_value = True
+    mock_iterdir.return_value = []
+    mock_unlink.side_effect = OSError("Permission denied")
+    mock_print.assert_not_called()
 
     with raises(SystemExit) as e:
         main()
