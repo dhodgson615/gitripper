@@ -11,11 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Optional, Tuple
 from zipfile import ZipFile
 
-except ImportError:
-    print("Package 'requests' not found. Attempting to install...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
-    import requests
-
+from requests import get
 
 GITHUB_API = "https://api.github.com"
 
