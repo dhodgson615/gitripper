@@ -351,6 +351,10 @@ def test_main_dest_exists_force_rm_fails(
     mock_print.assert_not_called()
     mock_parse_args.return_value = args
     mock_parse_url.return_value = ("u", "r")
+    mock_isdir.return_value = True
+    mock_exists.return_value = True
+    mock_iterdir.return_value = [Path("some_file")]
+    mock_rmtree.side_effect = OSError("Permission denied")
 
     with raises(SystemExit) as e:
         main()
