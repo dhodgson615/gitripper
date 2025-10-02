@@ -229,8 +229,6 @@ def test_initialize_repo(mock_run: MagicMock, tmp_path: Path) -> None:
 def test_main_entrypoint(mock_main: MagicMock) -> None:
     """Test the main entrypoint calls the main function."""
     with patch("gitripper.__name__", "__main__"):
-        from importlib import reload
-
         import gitripper
 
         mock_main.assert_not_called()
