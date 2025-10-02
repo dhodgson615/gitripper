@@ -24,7 +24,9 @@ def parse_github_url(url: str) -> Tuple[str, str]:
         url = url[:-4]
 
     # HTTPS or HTTP
-    if m := re.match(r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$", url):
+    m = match(r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$", url)
+
+    if m:
         return m.group(1), m.group(2)
 
     # SSH form: git@github.com:owner/repo
