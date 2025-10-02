@@ -1,7 +1,4 @@
-"""gitripper.py
-
-Download GitHub repo contents as a zip, extract locally, initialize a
-new git repo.
+from __future__ import annotations
 
 Features:
  - Accepts many GitHub URL formats (https, ssh, git@)
