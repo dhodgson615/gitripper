@@ -348,6 +348,7 @@ def test_main_dest_exists_force_rm_fails(
 ) -> None:
     """Test main function when --force is used but removal fails."""
     args = MagicMock(url="https://github.com/u/r", force=True, dest="somedir")
+    mock_print.assert_not_called()
     mock_parse_args.return_value = args
     mock_parse_url.return_value = ("u", "r")
 
