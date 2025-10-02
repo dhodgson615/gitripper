@@ -167,7 +167,6 @@ def test_remove_embedded_git(tmp_path: Path) -> None:
     git_dir = tmp_path / "sub" / ".git"
     git_dir.mkdir(parents=True)
     (git_dir / "config").touch()
-
     assert git_dir.exists()
     remove_embedded_git(tmp_path)
     assert not git_dir.exists()
