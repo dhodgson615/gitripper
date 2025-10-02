@@ -279,7 +279,6 @@ def test_main_success_flow(
     zip_path = tmp_path / "repo-develop.zip"
     mock_download.return_value = zip_path
     main()
-
     mock_print.assert_called()
     mock_parse_url.assert_called_once_with(args.url)
     mock_check_git.assert_called_once()
