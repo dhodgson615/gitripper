@@ -236,6 +236,13 @@ def test_main_entrypoint(mock_main: MagicMock) -> None:
         mock_main.assert_not_called()
         reload(gitripper)
 
+        try:
+            gitripper.main()
+            assert False, "should have raised an exception"
+
+        except SystemExit:
+            pass
+
 
 @patch("gitripper.initialize_repo")
 @patch("gitripper.remove_embedded_git")
