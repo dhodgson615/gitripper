@@ -278,7 +278,6 @@ def test_main_success_flow(
     mock_parse_url.return_value = ("user", "repo")
     zip_path = tmp_path / "repo-develop.zip"
     mock_download.return_value = zip_path
-
     main()
 
     mock_print.assert_called()
