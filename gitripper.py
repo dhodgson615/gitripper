@@ -30,7 +30,9 @@ def parse_github_url(url: str) -> Tuple[str, str]:
         return m.group(1), m.group(2)
 
     # SSH form: git@github.com:owner/repo
-    if m := re.match(r"git@github\.com:([^/]+)/([^/]+)$", url):
+    m = match(r"git@github\.com:([^/]+)/([^/]+)$", url)
+
+    if m:
         return m.group(1), m.group(2)
 
     # ssh://git@github.com/owner/repo
