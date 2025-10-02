@@ -530,6 +530,13 @@ def test_main_init_fails(
     mock_parse_args.return_value = args
     mock_parse_url.return_value = ("u", "r")
     mock_get_branch.return_value = "main"
+    mock_download.return_value = Path("some.zip")
+    mock_print.assert_not_called()
+    mock_check_git.assert_not_called()
+    mock_parse_url.assert_not_called()
+    mock_init_repo.side_effect = Exception("Init failed")
+    mock_extract.return_value = None
+    mock_remove_git.return_value = None
 
     with raises(SystemExit) as e:
         main()
