@@ -154,7 +154,8 @@ def test_extract_empty_zip(tmp_path: Path) -> None:
     """Test that extracting an empty zip raises an error."""
     zip_path = tmp_path / "empty.zip"
     dest_dir = tmp_path / "dest"
-    with ZipFile(zip_path, "w") as zf:
+
+    with ZipFile(zip_path, "w"):
         pass
 
     with raises(RuntimeError, match="Zip archive is empty."):
