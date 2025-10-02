@@ -275,6 +275,7 @@ def test_main_success_flow(
 
     main()
 
+    mock_print.assert_called()
     mock_parse_url.assert_called_once_with(args.url)
     mock_check_git.assert_called_once()
     mock_get_branch.assert_not_called()  # Branch was specified
