@@ -1,3 +1,4 @@
+from importlib import reload
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 from zipfile import ZipFile
