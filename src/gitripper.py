@@ -133,11 +133,7 @@ def extract_zip(zip_path: Path, dest_dir: Path) -> None:
                 target = dest_dir / item.name
 
                 if target.exists():
-                    if target.is_dir():
-                        rmtree(target)
-
-                    else:
-                        target.unlink()
+                    rmtree(target) if target.is_dir() else target.unlink()
 
                 move(str(item), str(target))
 
