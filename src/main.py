@@ -58,7 +58,7 @@ def main() -> None:
     try:
         owner, repo = parse_github_url(args.url)
 
-        if not owner or not repo:
+        if owner == "" or repo == "":
             raise ValueError("Could not determine repository owner or name.")
 
     except ValueError as e:
