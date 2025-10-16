@@ -74,8 +74,8 @@ def main() -> None:
     if dest.exists():
         if any(dest.iterdir()) and not args.force:
             print(
-                f"Destination '{dest}' exists and is not empty. Use --force "
-                f"to overwrite.",
+                f"Destination '{dest}' exists and is not empty."
+                f"Use --force to overwrite.",
                 file=stderr,
             )
 
