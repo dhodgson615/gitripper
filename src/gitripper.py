@@ -96,18 +96,19 @@ def download_zip(
 
             return zip_file
 
-        elif r.status_code in (301, 302):
-            raise RuntimeError(f"Unexpected redirect: {r.status_code}")
-
-        elif r.status_code == 404:
-            raise FileNotFoundError(
-                f"Archive for {owner}/{repo}@{ref} not found (404)."
+        raise (
+            RuntimeError(f"Unexpected redirect: {r.status_code}")
+            if r.status_code in (301, 302)
+            else (
+                FileNotFoundError(
+                    f"Archive for {owner}/{repo}@{ref} not found (404)."
+                )
+                if r.status_code == 404
+                else RuntimeError(
+                    f"Failed to download archive: {r.status_code} {r.text}"
+                )
             )
-
-        else:
-            raise RuntimeError(
-                f"Failed to download archive: {r.status_code} {r.text}"
-            )
+        )
 
 
 def extract_zip(zip_path: Path, dest_dir: Path) -> None:
