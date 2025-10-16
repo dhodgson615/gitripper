@@ -26,12 +26,8 @@ def remove_embedded_git(dirpath: Path) -> None:
 def check_git_installed() -> None:
     """Ensure git is available in PATH."""
     try:
-        run(
-            ["git", "--version"],
-            check=True,
-            stdout=DEVNULL,
-            stderr=DEVNULL,
-        )
+        run(["git", "--version"], check=True, stdout=DEVNULL, stderr=DEVNULL)
+
     except OSError as e:
         raise EnvironmentError(
             "git is not installed or not available in PATH."
