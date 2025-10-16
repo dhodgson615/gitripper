@@ -8,7 +8,7 @@ from src.github_api import GITHUB_API
 
 
 def get_default_branch(
-    owner: str | None, repo: str, token: Optional[str]
+    owner: Optional[str], repo: str, token: Optional[str]
 ) -> str:
     """Query GitHub API for default_branch."""
     if owner is None:
