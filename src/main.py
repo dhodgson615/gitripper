@@ -22,47 +22,34 @@ def main() -> None:
         "local git repo."
     )
 
-    p.add_argument("url", help="URL of the GitHub repository")
+    arguments: List[Tuple[str, dict[str, Any]]] = [
+        ("url", {"help": "URL of the GitHub repository"}),
+        (
+            "--branch",
+            {"help": "Branch/ref to fetch (default: repo default branch)"},
+        ),
+        ("--token", {"help": "GitHub personal access token"}),
+        ("--dest", {"help": "Destination directory (default: ./<repo>-copy)"}),
+        (
+            "--author-name",
+            {"help": "Set git user.name for the initial commit"},
+        ),
+        (
+            "--author-email",
+            {"help": "Set git user.email for the initial commit"},
+        ),
+        ("--remote", {"help": "Set git remote origin after initial commit"}),
+        (
+            "--force",
+            {
+                "help": "Overwrite destination if it exists",
+                "action": "store_true",
+            },
+        ),
+    ]
 
-    p.add_argument(
-        "--branch",
-        help="Branch/ref to fetch (default: repo default branch)",
-        default=None,
-    )
-
-    p.add_argument(
-        "--token", help="GitHub personal access token", default=None
-    )
-
-    p.add_argument(
-        "--dest",
-        help="Destination directory (default: ./<repo>-copy)",
-        default=None,
-    )
-
-    p.add_argument(
-        "--author-name",
-        help="Set git user.name for the initial commit",
-        default=None,
-    )
-
-    p.add_argument(
-        "--author-email",
-        help="Set git user.email for the initial commit",
-        default=None,
-    )
-
-    p.add_argument(
-        "--remote",
-        help="Set git remote origin after initial commit",
-        default=None,
-    )
-
-    p.add_argument(
-        "--force",
-        help="Overwrite destination if it exists",
-        action="store_true",
-    )
+    for arg, kwargs in arguments:
+        p.add_argument(arg, **kwargs)
 
     args = p.parse_args()
     token = args.token or environ.get("GITHUB_TOKEN")
