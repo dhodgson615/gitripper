@@ -18,8 +18,8 @@ from src.zip_utils import download_zip, extract_zip
 def main() -> None:
     """Main entry point."""
     p = ArgumentParser(
-        description="Download a GitHub repository's contents and "
-        "create a local git repo."
+        description="Download a GitHub repository's contents and create a "
+        "local git repo."
     )
 
     p.add_argument("url", help="URL of the GitHub repository")
