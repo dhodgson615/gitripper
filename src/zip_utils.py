@@ -53,9 +53,7 @@ def extract_zip(zip_path: Path, dest_dir: Path) -> None:
             temp_path = Path(temp_dir)
             zf.extractall(path=temp_path)
             top_level_dirs = [p for p in temp_path.iterdir() if p.is_dir()]
-
-            if not dest_dir.exists():
-                dest_dir.mkdir(parents=True)
+            dest_dir.mkdir(parents=True, exist_ok=True)
 
             source_dir = (
                 top_level_dirs[0] if len(top_level_dirs) == 1 else temp_path
