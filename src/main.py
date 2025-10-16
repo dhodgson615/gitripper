@@ -71,7 +71,6 @@ def main() -> None:
         else Path(f"{repo}-copy" if repo else "repo-copy").resolve()
     )
 
-    # Check if destination exists
     if dest.exists():
         if any(dest.iterdir()) and not args.force:
             print(
