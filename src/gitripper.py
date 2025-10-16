@@ -148,7 +148,7 @@ def remove_embedded_git(dirpath: Path) -> None:
                 rmtree(git_dir)
                 print(f"Removed embedded .git at {git_dir}")
 
-            except Exception as e:
+            except OSError as e:
                 print(
                     f"Warning: failed to remove embedded .git at "
                     f"{git_dir}: {e}",
