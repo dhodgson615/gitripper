@@ -12,6 +12,7 @@ def initialize_repo(
     """Initialize git repo with initial commit."""
 
     def git(*args: str) -> None:
+        """Run git command in dest directory."""
         run(["git", *args], cwd=str(dest), check=True)
 
     git("init")
