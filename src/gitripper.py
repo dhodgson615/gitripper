@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
-from os import environ, walk
+from os import environ
 from pathlib import Path
 from re import match
 from shutil import move, rmtree
