@@ -16,6 +16,17 @@ from requests import RequestException, get
 GITHUB_API = "https://api.github.com"
 
 
+"""
+FIXME:
+    FAILED test_gitripper.py::test_parse_github_url_invalid[https://gitlab.com/user/repo] - Failed: DID NOT RAISE <class 'ValueError'>
+    FAILED test_gitripper.py::test_parse_github_url_invalid[not a url] - Failed: DID NOT RAISE <class 'ValueError'>
+    FAILED test_gitripper.py::test_parse_github_url_invalid[user/repo] - Failed: DID NOT RAISE <class 'ValueError'>
+    FAILED test_gitripper.py::test_main_download_fails - Exception: Download failed
+    FAILED test_gitripper.py::test_main_extract_fails - Exception: Extract failed
+    FAILED test_gitripper.py::test_main_init_fails - Exception: Init failed
+"""
+
+
 def parse_github_url(url: str) -> Tuple[str, str]:
     """Parse GitHub URL and return (owner, repo), or ("", "") on failure."""
     return next(
