@@ -505,13 +505,13 @@ def test_main_extract_fails(
     assert e.value.code == 7
 
 
-@patch("gitripper.initialize_repo", side_effect=Exception("Init failed"))
-@patch("gitripper.remove_embedded_git")
-@patch("gitripper.extract_zip")
-@patch("gitripper.download_zip")
-@patch("gitripper.get_default_branch")
-@patch("gitripper.check_git_installed")
-@patch("gitripper.parse_github_url")
+@patch("src.gitripper.initialize_repo", side_effect=Exception("Init failed"))
+@patch("src.gitripper.remove_embedded_git")
+@patch("src.gitripper.extract_zip")
+@patch("src.gitripper.download_zip")
+@patch("src.gitripper.get_default_branch")
+@patch("src.gitripper.check_git_installed")
+@patch("src.gitripper.parse_github_url")
 @patch("argparse.ArgumentParser.parse_args")
 @patch("builtins.print")
 def test_main_init_fails(
