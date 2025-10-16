@@ -63,7 +63,6 @@ def main() -> None:
     except ValueError as e:
         print(f"Error: {e}", file=stderr)
         exit(2)
-        owner, repo = None, None
 
     dest = (
         Path(args.dest)
