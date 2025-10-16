@@ -4,10 +4,9 @@ from unittest.mock import MagicMock, call, patch
 from zipfile import ZipFile
 
 from pytest import mark, raises
-
-from gitripper import (check_git_installed, download_zip, extract_zip,
-                       get_default_branch, initialize_repo, main,
-                       parse_github_url, remove_embedded_git)
+from src.gitripper import (check_git_installed, download_zip, extract_zip,
+                           get_default_branch, initialize_repo, main,
+                           parse_github_url, remove_embedded_git)
 
 
 @mark.parametrize(
