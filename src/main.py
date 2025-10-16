@@ -136,7 +136,7 @@ def main() -> None:
 
         except OSError as e:
             print(f"Failed to extract archive: {e}", file=stderr)
-            exit(7)
+            exit(ERR_EXTRACTION_FAILED)
 
     remove_embedded_git(dest)
 
