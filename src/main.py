@@ -114,7 +114,6 @@ def main() -> None:
 
             ref = "main"
 
-    # Download archive and extract
     with TemporaryDirectory() as tmp_dir_str:
         tmp_dir_path = Path(tmp_dir_str)
 
