@@ -117,8 +117,8 @@ def extract_zip(zip_path: Path, dest_dir: Path) -> None:
         if not zf.namelist():
             raise RuntimeError("Zip archive is empty.")
 
-        with TemporaryDirectory() as tmpd:
-            temp_path = Path(tmpd)
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
             zf.extractall(path=temp_path)
             top_level_dirs = [p for p in temp_path.iterdir() if p.is_dir()]
 
