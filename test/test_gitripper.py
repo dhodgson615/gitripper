@@ -430,7 +430,7 @@ def test_main_git_not_installed(
 
 
 @patch(
-    "src.gitripper.download_zip",
+    "src.main.download_zip",
     side_effect=RequestException("Download failed"),
 )
 @patch("src.gitripper.get_default_branch")
