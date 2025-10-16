@@ -14,9 +14,15 @@ def initialize_repo(
     def git(*args: str) -> None:
         run(["git", *args], cwd=str(dest), check=True)
 
-    run(["git", "add", "."], cwd=str(dest), check=True)
-    run(["git", "commit", "-m", "Initial commit"], cwd=str(dest), check=True)
-
+    git("init")
+    for key, value in [
+        ("user.name", author_name),
+        ("user.email", author_email),
+    ]:
+        if value:
+            git("config", key, value)
+    git("add", ".")
+    git("commit", "-m", "Initial commit")
     if remote:
         run(
             ["git", "remote", "add", "origin", remote],
