@@ -189,7 +189,7 @@ def test_check_git_installed_success(mock_run: MagicMock) -> None:
     assert mock_run.call_args[0][0][0] == "git"
 
 
-@patch("src.gitripper.run", side_effect=FileNotFoundError)
+@patch("src.git_utils.run", side_effect=FileNotFoundError)
 def test_check_git_installed_failure(mock_run: MagicMock) -> None:
     """Test that check_git_installed raises EnvironmentError when git
     is missing.
