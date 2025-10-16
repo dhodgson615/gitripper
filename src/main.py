@@ -81,7 +81,7 @@ def main() -> None:
 
             exit(3)
 
-        elif args.force:
+        if args.force:
             try:
                 rmtree(dest) if dest.is_dir() else dest.unlink()
 
