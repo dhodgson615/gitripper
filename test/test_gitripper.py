@@ -465,11 +465,11 @@ def test_main_download_fails(
     assert e.value.code == 6
 
 
-@patch("gitripper.extract_zip", side_effect=Exception("Extract failed"))
-@patch("gitripper.download_zip")
-@patch("gitripper.get_default_branch")
-@patch("gitripper.check_git_installed")
-@patch("gitripper.parse_github_url")
+@patch("src.gitripper.extract_zip", side_effect=Exception("Extract failed"))
+@patch("src.gitripper.download_zip")
+@patch("src.gitripper.get_default_branch")
+@patch("src.gitripper.check_git_installed")
+@patch("src.gitripper.parse_github_url")
 @patch("argparse.ArgumentParser.parse_args")
 @patch("builtins.print")
 def test_main_extract_fails(
