@@ -300,7 +300,7 @@ def main() -> None:
                 else:
                     dest.unlink()
 
-            except Exception as e:
+            except OSError as e:
                 print(
                     f"Failed to remove existing destination: {e}",
                     file=stderr,
