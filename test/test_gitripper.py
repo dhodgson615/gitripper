@@ -513,7 +513,7 @@ def test_main_extract_fails(
     assert e.value.code == 7
 
 
-@patch("src.gitripper.initialize_repo", side_effect=Exception("Init failed"))
+@patch("src.gitripper.initialize_repo", side_effect=OSError("Init failed"))
 @patch("src.gitripper.remove_embedded_git")
 @patch("src.gitripper.extract_zip")
 @patch("src.gitripper.download_zip")
