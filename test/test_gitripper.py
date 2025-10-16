@@ -407,7 +407,7 @@ def test_main_dest_exists_force_rm_file_fails(
     side_effect=EnvironmentError("git not found"),
 )
 @patch("argparse.ArgumentParser.parse_args")
-@patch("gitripper.parse_github_url")
+@patch("src.gitripper.parse_github_url")
 @patch("builtins.print")
 def test_main_git_not_installed(
     mock_print: MagicMock,
