@@ -7,9 +7,7 @@ from shutil import rmtree
 from sys import exit, stderr
 from tempfile import TemporaryDirectory
 
-    with get(url, headers=headers, stream=True, timeout=60) as r:
-        if r.status_code == 200:
-            zip_file = dest_path / f"{repo}-{ref}.zip"
+from requests import RequestException
 
             with open(zip_file, "wb") as fh:
                 for chunk in r.iter_content(chunk_size=8192):
