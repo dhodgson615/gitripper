@@ -505,7 +505,6 @@ def test_main_extract_fails(
     mock_print.assert_not_called()
     mock_check_git.assert_not_called()
     mock_parse_url.assert_not_called()
-    mock_extract.side_effect = Exception("Extract failed")
 
     with raises(SystemExit) as e:
         main()
