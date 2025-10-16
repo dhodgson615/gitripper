@@ -165,8 +165,7 @@ def check_git_installed() -> None:
             stdout=DEVNULL,
             stderr=DEVNULL,
         )
-
-    except Exception as e:
+    except OSError as e:
         raise EnvironmentError(
             "git is not installed or not available in PATH."
         ) from e
