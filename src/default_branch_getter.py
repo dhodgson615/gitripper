@@ -14,12 +14,7 @@ def get_default_branch(
     if owner is None:
         raise ValueError("Owner cannot be None")
 
-    url = (
-        f"{GITHUB_API}/repos/{owner}/{repo}"
-        if owner
-        else f"{GITHUB_API}/repos/{repo}"
-    )
-
+    url = f"{GITHUB_API}/repos/{owner}/{repo}"
     headers = {"Authorization": f"token {token}"} if token else {}
     r = get(url, headers=headers, timeout=30)
 
