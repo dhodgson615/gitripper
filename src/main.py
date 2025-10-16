@@ -83,7 +83,7 @@ def main() -> None:
                 file=stderr,
             )
 
-            exit(3)
+            exit(ERR_DEST_EXISTS)
 
         if args.force:
             try:
