@@ -104,7 +104,7 @@ def test_download_zip_success(mock_get: MagicMock, tmp_path: Path) -> None:
     assert headers["Authorization"] == "token token"
 
 
-@patch("gitripper.get")
+@patch("src.gitripper.get")
 def test_download_zip_not_found(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test handling of a 404 error during zip download."""
     mock_response = MagicMock()
