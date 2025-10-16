@@ -93,7 +93,7 @@ def test_get_default_branch_no_owner() -> None:
         get_default_branch(None, "repo", "token")
 
 
-@patch("src.gitripper.get")
+@patch("src.zip_utils.get")
 def test_download_zip_success(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test successful download of a zip archive."""
     mock_response = MagicMock()
