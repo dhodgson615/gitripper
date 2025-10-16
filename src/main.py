@@ -87,8 +87,7 @@ def main() -> None:
 
             except OSError as e:
                 print(
-                    f"Failed to remove existing destination: {e}",
-                    file=stderr,
+                    f"Failed to remove existing destination: {e}", file=stderr
                 )
 
                 exit(4)
