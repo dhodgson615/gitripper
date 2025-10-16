@@ -15,6 +15,7 @@ def initialize_repo(
         run(["git", *args], cwd=str(dest), check=True)
 
     git("init")
+
     for key, value in [
         ("user.name", author_name),
         ("user.email", author_email),
