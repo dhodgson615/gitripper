@@ -24,10 +24,5 @@ def initialize_repo(
     git("add", ".")
     git("commit", "-m", "Initial commit")
     if remote:
-        run(
-            ["git", "remote", "add", "origin", remote],
-            cwd=str(dest),
-            check=True,
-        )
-
+        git("remote", "add", "origin", remote)
         print(f"Set remote origin to {remote}")
