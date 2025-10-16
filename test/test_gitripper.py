@@ -42,10 +42,6 @@ def test_parse_github_url_invalid(url: str) -> None:
     with raises(ValueError):
         parse_github_url(url)
 
-        # FIXME: FAILED test_gitripper.py::test_parse_github_url_invalid[https://gitlab.com/user/repo] - Failed: DID NOT RAISE <class 'ValueError'>
-        #     FAILED test_gitripper.py::test_parse_github_url_invalid[not a url] - Failed: DID NOT RAISE <class 'ValueError'>
-        #     FAILED test_gitripper.py::test_parse_github_url_invalid[user/repo] - Failed: DID NOT RAISE <class 'ValueError'>
-
 
 @patch("src.default_branch_getter.get")
 def test_get_default_branch_success(mock_get: MagicMock) -> None:
