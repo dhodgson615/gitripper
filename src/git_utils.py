@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from os import walk
 from pathlib import Path
 from shutil import rmtree
