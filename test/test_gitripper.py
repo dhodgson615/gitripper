@@ -473,7 +473,7 @@ def test_main_download_fails(
     assert e.value.code == 6
 
 
-@patch("src.gitripper.extract_zip", side_effect=Exception("Extract failed"))
+@patch("src.gitripper.extract_zip", side_effect=OSError("Extract failed"))
 @patch("src.gitripper.download_zip")
 @patch("src.gitripper.get_default_branch")
 @patch("src.gitripper.check_git_installed")
