@@ -70,7 +70,7 @@ def test_get_default_branch_not_found(mock_get: MagicMock) -> None:
         get_default_branch("owner", "repo", None)
 
 
-@patch("gitripper.get")
+@patch("src.gitripper.get")
 def test_get_default_branch_api_error(mock_get: MagicMock) -> None:
     """Test handling of a generic API error."""
     mock_response = MagicMock()
