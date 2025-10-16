@@ -229,7 +229,7 @@ def test_initialize_repo(mock_run: MagicMock, tmp_path: Path) -> None:
     mock_run.assert_has_calls(expected_calls)
 
 
-@patch("gitripper.main")
+@patch("src.gitripper.main")
 def test_main_entrypoint(mock_main: MagicMock) -> None:
     """Test the main entrypoint calls the main function."""
     with patch("gitripper.__name__", "__main__"):
