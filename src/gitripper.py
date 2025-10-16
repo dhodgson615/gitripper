@@ -339,7 +339,7 @@ def main() -> None:
             zip_path = download_zip(owner, repo, ref, token, tmp_dir_path)
             print(f"Downloaded archive to {zip_path}")
 
-        except Exception as e:
+        except RequestException as e:
             print(f"Failed to download repository archive: {e}", file=stderr)
 
             exit(6)
