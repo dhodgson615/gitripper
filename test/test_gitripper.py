@@ -181,7 +181,7 @@ def test_remove_embedded_git(tmp_path: Path) -> None:
     assert not git_dir.exists()
 
 
-@patch("src.gitripper.run")
+@patch("src.git_utils.run")
 def test_check_git_installed_success(mock_run: MagicMock) -> None:
     """Test that check_git_installed passes when git is present."""
     check_git_installed()
