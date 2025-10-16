@@ -9,7 +9,7 @@ from requests import RequestException
 from src.default_branch_getter import get_default_branch
 from src.git_utils import check_git_installed, remove_embedded_git
 from src.github_url_parser import parse_github_url
-from src.gitripper import main
+from src.main import main
 from src.repo_initializer import initialize_repo
 from src.zip_utils import download_zip, extract_zip
 
