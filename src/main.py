@@ -67,7 +67,7 @@ def main() -> None:
 
     except ValueError as e:
         print(f"Error: {e}", file=stderr)
-        exit(2)
+        exit(ERR_INVALID_URL)
 
     dest = (
         Path(args.dest)
