@@ -183,8 +183,8 @@ def test_check_git_installed_success(mock_run: MagicMock) -> None:
 
 @patch("gitripper.run", side_effect=FileNotFoundError)
 def test_check_git_installed_failure(mock_run: MagicMock) -> None:
-    """Test that check_git_installed raises EnvironmentError when git is
-    missing.
+    """Test that check_git_installed raises EnvironmentError when git
+    is missing.
     """
     with raises(EnvironmentError):
         check_git_installed()
