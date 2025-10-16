@@ -101,7 +101,7 @@ def main() -> None:
 
     except EnvironmentError as e:
         print(f"Error: {e}", file=stderr)
-        exit(5)
+        exit(ERR_GIT_NOT_FOUND)
 
     ref = args.branch
 
