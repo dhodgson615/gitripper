@@ -237,7 +237,7 @@ def test_main_entrypoint(mock_main: MagicMock) -> None:
         from src import main
 
         mock_main.assert_not_called()
-        reload(gitripper)
+        reload(main)
 
         try:
             gitripper.main()
