@@ -146,7 +146,7 @@ def main() -> None:
 
     except OSError as e:
         print(f"Failed to initialize repository: {e}", file=stderr)
-        exit(8)
+        exit(ERR_INIT_FAILED)
 
     print("Done. Repository copied to:", dest)
     print("Note: this repository has no history from the original repo.")
