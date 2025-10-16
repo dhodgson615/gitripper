@@ -4,6 +4,7 @@ from pathlib import Path
 from shutil import rmtree
 from sys import exit, stderr
 from tempfile import TemporaryDirectory
+from typing import Any, List, Tuple
 
 from requests import RequestException
 
