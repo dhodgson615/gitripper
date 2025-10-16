@@ -18,10 +18,7 @@ GITHUB_API = "https://api.github.com"
 
 def parse_github_url(url: str) -> Tuple[str, str]:
     """Parse GitHub URL and return (owner, repo)."""
-    url = url.strip()
-
-    if url.endswith(".git"):
-        url = url[:-4]
+    url = url.strip().removesuffix(".git")
 
     # HTTPS or HTTP
     m = match(r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$", url)
