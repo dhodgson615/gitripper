@@ -198,7 +198,7 @@ def test_check_git_installed_failure(mock_run: MagicMock) -> None:
         check_git_installed()
 
 
-@patch("src.gitripper.run")
+@patch("src.repo_initializer.run")
 def test_initialize_repo(mock_run: MagicMock, tmp_path: Path) -> None:
     """Test the git repository initialization process."""
     author_name = "Test User"
