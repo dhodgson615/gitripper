@@ -47,7 +47,7 @@ def test_parse_github_url_invalid(url: str) -> None:
         #     FAILED test_gitripper.py::test_parse_github_url_invalid[user/repo] - Failed: DID NOT RAISE <class 'ValueError'>
 
 
-@patch("src.gitripper.get")
+@patch("src.default_branch_getter.get")
 def test_get_default_branch_success(mock_get: MagicMock) -> None:
     """Test successfully getting the default branch."""
     mock_response = MagicMock()
