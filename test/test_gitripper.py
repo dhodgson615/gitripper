@@ -465,7 +465,6 @@ def test_main_download_fails(
     mock_print.assert_not_called()
     mock_check_git.assert_not_called()
     mock_parse_url.assert_not_called()
-    mock_download.side_effect = Exception("Download failed")
 
     with raises(SystemExit) as e:
         main()
