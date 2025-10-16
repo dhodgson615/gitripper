@@ -67,9 +67,7 @@ def main() -> None:
     dest = (
         Path(args.dest)
         if args.dest
-        else Path(
-            f"{repo}-copy" if repo is not None else "repo-copy"
-        ).resolve()
+        else Path(f"{repo}-copy" if repo else "repo-copy").resolve()
     )
 
     # Check if destination exists
