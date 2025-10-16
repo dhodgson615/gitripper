@@ -341,7 +341,6 @@ def main() -> None:
 
         except RequestException as e:
             print(f"Failed to download repository archive: {e}", file=stderr)
-
             exit(6)
 
         try:
