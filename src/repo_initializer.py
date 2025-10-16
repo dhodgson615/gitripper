@@ -22,6 +22,7 @@ def initialize_repo(
     ]:
         if value:
             git("config", key, value)
+
     git("add", ".")
     git("commit", "-m", "Initial commit")
     if remote:
