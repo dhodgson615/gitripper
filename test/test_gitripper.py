@@ -115,7 +115,7 @@ def test_download_zip_not_found(mock_get: MagicMock, tmp_path: Path) -> None:
         download_zip("owner", "repo", "main", None, tmp_path)
 
 
-@patch("gitripper.get")
+@patch("src.gitripper.get")
 def test_download_zip_error(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test handling of a generic error during zip download."""
     mock_response = MagicMock()
