@@ -240,7 +240,7 @@ def test_main_entrypoint(mock_main: MagicMock) -> None:
         reload(main)
 
         try:
-            gitripper.main()
+            main.main()
             assert False, "should have raised an exception"
 
         except SystemExit:
