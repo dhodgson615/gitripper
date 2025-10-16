@@ -433,7 +433,10 @@ def test_main_git_not_installed(
     assert e.value.code == 5
 
 
-@patch("src.gitripper.download_zip", side_effect=Exception("Download failed"))
+@patch(
+    "src.gitripper.download_zip",
+    side_effect=RequestException("Download failed"),
+)
 @patch("src.gitripper.get_default_branch")
 @patch("src.gitripper.check_git_installed")
 @patch("src.gitripper.parse_github_url")
