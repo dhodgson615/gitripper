@@ -11,12 +11,8 @@ def initialize_repo(
 ) -> None:
     """Initialize git repo with initial commit."""
 
-    if author_email:
-        run(
-            ["git", "config", "user.email", author_email],
-            cwd=str(dest),
-            check=True,
-        )
+    def git(*args: str) -> None:
+        run(["git", *args], cwd=str(dest), check=True)
 
     run(["git", "add", "."], cwd=str(dest), check=True)
     run(["git", "commit", "-m", "Initial commit"], cwd=str(dest), check=True)
