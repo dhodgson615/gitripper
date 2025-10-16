@@ -3,9 +3,7 @@ from __future__ import annotations
 from argparse import ArgumentParser
 from os import environ
 from pathlib import Path
-from re import match
-from shutil import move, rmtree
-from subprocess import DEVNULL, run
+from shutil import rmtree
 from sys import exit, stderr
 from tempfile import TemporaryDirectory
 from typing import Optional, Tuple
