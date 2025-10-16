@@ -357,7 +357,7 @@ def main() -> None:
         print("Initializing new git repository...")
         initialize_repo(dest, args.author_name, args.author_email, args.remote)
 
-    except Exception as e:
+    except OSError as e:
         print(f"Failed to initialize repository: {e}", file=stderr)
         exit(8)
 
