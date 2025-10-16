@@ -552,12 +552,12 @@ def test_main_init_fails(
     assert e.value.code == 8
 
 
-@patch("src.gitripper.initialize_repo")
-@patch("src.gitripper.extract_zip")
-@patch("src.gitripper.download_zip")
-@patch("src.gitripper.get_default_branch", side_effect=Exception("API error"))
-@patch("src.gitripper.check_git_installed")
-@patch("src.gitripper.parse_github_url")
+@patch("src.main.initialize_repo")
+@patch("src.main.extract_zip")
+@patch("src.main.download_zip")
+@patch("src.main.get_default_branch", side_effect=Exception("API error"))
+@patch("src.main.check_git_installed")
+@patch("src.main.parse_github_url")
 @patch("argparse.ArgumentParser.parse_args")
 @patch("builtins.print")
 def test_main_get_default_branch_fails(
