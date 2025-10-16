@@ -101,7 +101,7 @@ def main() -> None:
 
     ref = args.branch
 
-    if ref is None:
+    if not ref:
         try:
             ref = get_default_branch(owner, repo, token)
             print(f"Using default branch '{ref}'")
