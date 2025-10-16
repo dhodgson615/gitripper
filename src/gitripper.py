@@ -322,7 +322,7 @@ def main() -> None:
             ref = get_default_branch(owner, repo, token)
             print(f"Using default branch '{ref}'")
 
-        except Exception as e:
+        except Exception as e:  # FIXME: specify Exception type
             print(
                 f"Warning: could not determine default branch: {e}. "
                 f"Using 'main'."
