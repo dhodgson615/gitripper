@@ -20,20 +20,12 @@ def parse_github_url(url: str) -> Tuple[str, str]:
     """Parse GitHub URL and return (owner, repo)."""
     url = url.strip().removesuffix(".git")
 
-    # HTTPS or HTTP
-    m = match(r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$", url)
-
-    if m:
-        return m.group(1), m.group(2)
-
-    # SSH form: git@github.com:owner/repo
-    m = match(r"git@github\.com:([^/]+)/([^/]+)$", url)
-
-    if m:
-        return m.group(1), m.group(2)
-
-    # ssh://git@github.com/owner/repo
-    m = match(r"ssh://git@github\.com/([^/]+)/([^/]+)$", url)
+    for r in [
+        r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$",
+        r"git@github\.com:([^/]+)/([^/]+)$",
+        r"ssh://git@github\.com/([^/]+)/([^/]+)$",
+    ]:
+        m = match(r, url)
 
     if m:
         return m.group(1), m.group(2)
