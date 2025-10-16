@@ -374,7 +374,7 @@ def test_main_dest_exists_force_rm_fails(
 @patch("pathlib.Path.exists", return_value=True)
 @patch("pathlib.Path.iterdir", return_value=[])
 @patch("argparse.ArgumentParser.parse_args")
-@patch("gitripper.parse_github_url")
+@patch("src.gitripper.parse_github_url")
 @patch("builtins.print")
 def test_main_dest_exists_force_rm_file_fails(
     mock_print: MagicMock,
