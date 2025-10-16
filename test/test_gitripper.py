@@ -297,7 +297,7 @@ def test_main_success_flow(
 
 
 @patch("argparse.ArgumentParser.parse_args")
-@patch("src.gitripper.parse_github_url", side_effect=ValueError("Invalid URL"))
+@patch("src.main.parse_github_url", side_effect=ValueError("Invalid URL"))
 @patch("builtins.print")
 def test_main_invalid_url(
     mock_print: MagicMock,
