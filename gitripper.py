@@ -27,8 +27,8 @@ def parse_github_url(url: str) -> Tuple[str, str]:
     ]:
         m = match(r, url)
 
-    if m:
-        return m.group(1), m.group(2)
+        if m:
+            return m.group(1), m.group(2)
 
     raise ValueError(f"Could not parse GitHub URL: {url}")
 
