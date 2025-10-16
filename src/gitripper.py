@@ -103,11 +103,7 @@ def main() -> None:
 
         elif args.force:
             try:
-                if dest.is_dir():
-                    rmtree(dest)
-
-                else:
-                    dest.unlink()
+                rmtree(dest) if dest.is_dir() else dest.unlink()
 
             except OSError as e:
                 print(
