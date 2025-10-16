@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Optional, Tuple
 from zipfile import ZipFile
 
-from requests import get
+from requests import RequestException, get
 
 GITHUB_API = "https://api.github.com"
 
