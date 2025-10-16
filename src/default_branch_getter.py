@@ -24,7 +24,4 @@ def get_default_branch(
     if r.status_code == 404:
         raise FileNotFoundError(f"Repository {owner}/{repo} not found (404).")
 
-    else:
-        raise RuntimeError(
-            f"Failed to get repo info: {r.status_code} {r.text}"
-        )
+    raise RuntimeError(f"Failed to get repo info: {r.status_code} {r.text}")
