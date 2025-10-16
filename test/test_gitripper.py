@@ -408,7 +408,7 @@ def test_main_dest_exists_force_rm_file_fails(
 
 
 @patch(
-    "gitripper.check_git_installed",
+    "src.gitripper.check_git_installed",
     side_effect=EnvironmentError("git not found"),
 )
 @patch("argparse.ArgumentParser.parse_args")
