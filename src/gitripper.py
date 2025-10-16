@@ -125,7 +125,6 @@ def extract_zip(zip_path: Path, dest_dir: Path) -> None:
             if not dest_dir.exists():
                 dest_dir.mkdir(parents=True)
 
-            # Extract content from temp dir to destination
             source_dir = (
                 top_level_dirs[0] if len(top_level_dirs) == 1 else temp_path
             )
