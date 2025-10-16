@@ -53,6 +53,7 @@ def main() -> None:
 
     args = p.parse_args()
     token = args.token or environ.get("GITHUB_TOKEN")
+    owner, repo = "", ""
 
     try:
         owner, repo = parse_github_url(args.url)
