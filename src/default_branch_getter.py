@@ -19,8 +19,7 @@ def get_default_branch(
     r = get(url, headers=headers, timeout=30)
 
     if r.status_code == 200:
-        branch_name: str = r.json().get("default_branch", "main")
-        return branch_name
+        return r.json().get("default_branch", "main")
 
     elif r.status_code == 404:
         raise FileNotFoundError(f"Repository {owner}/{repo} not found (404).")
