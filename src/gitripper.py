@@ -347,7 +347,7 @@ def main() -> None:
             print(f"Extracting archive to {dest} ...")
             extract_zip(zip_path, dest)
 
-        except Exception as e:
+        except OSError as e:
             print(f"Failed to extract archive: {e}", file=stderr)
             exit(7)
 
