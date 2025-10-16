@@ -64,7 +64,7 @@ def test_get_default_branch_success(mock_get: MagicMock) -> None:
     )
 
 
-@patch("src.gitripper.get")
+@patch("src.default_branch_getter.get")
 def test_get_default_branch_not_found(mock_get: MagicMock) -> None:
     """Test handling of a 404 error when getting the default branch."""
     mock_response = MagicMock()
