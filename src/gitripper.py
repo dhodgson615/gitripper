@@ -262,6 +262,12 @@ def main() -> None:
     try:
         owner, repo = parse_github_url(args.url)
 
+        if owner is None or repo is None:
+            raise ValueError(
+                f"Could not determine repository "
+                f"{'owner' if not owner else 'name' if not repo else 'info'}."
+            )
+
     except ValueError as e:
         print(f"Error: {e}", file=stderr)
         exit(2)
