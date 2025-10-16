@@ -94,7 +94,7 @@ def main() -> None:
                     f"Failed to remove existing destination: {e}", file=stderr
                 )
 
-                exit(4)
+                exit(ERR_CLEANUP_FAILED)
 
     try:
         check_git_installed()
