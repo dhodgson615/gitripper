@@ -1,22 +1,17 @@
+from __future__ import annotations
+
 from argparse import ArgumentParser
-from os import environ
+from os import environ, walk
 from pathlib import Path
-from shutil import rmtree
+from re import match
+from shutil import move, rmtree
+from subprocess import DEVNULL, run
 from sys import exit, stderr
 from tempfile import TemporaryDirectory
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
+from zipfile import ZipFile
 
-from requests import RequestException
-
-from src.default_branch_getter import get_default_branch
-from src.error_codes import (ERR_CLEANUP_FAILED, ERR_DEST_EXISTS,
-                             ERR_DOWNLOAD_FAILED, ERR_EXTRACTION_FAILED,
-                             ERR_GIT_NOT_FOUND, ERR_INIT_FAILED,
-                             ERR_INVALID_URL)
-from src.git_utils import check_git_installed, remove_embedded_git
-from src.github_url_parser import parse_github_url
-from src.repo_initializer import initialize_repo
-from src.zip_utils import download_zip, extract_zip
+from requests import RequestException, get
 
 
 def main() -> None:
@@ -154,3 +149,173 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def get_default_branch(
+    owner: Optional[str], repo: str, token: Optional[str]
+) -> Any:
+    """Query GitHub API for default_branch."""
+    if owner is None:
+        raise ValueError("Owner cannot be None")
+
+    url = f"{GITHUB_API}/repos/{owner}/{repo}"
+    headers = {"Authorization": f"token {token}"} if token else {}
+    r = get(url, headers=headers, timeout=30)
+
+    if r.status_code == 200:
+        return r.json().get("default_branch", "main")
+
+    if r.status_code == 404:
+        raise FileNotFoundError(f"Repository {owner}/{repo} not found (404).")
+
+    raise RuntimeError(f"Failed to get repo info: {r.status_code} {r.text}")
+
+
+ERR_INVALID_URL = 2
+ERR_DEST_EXISTS = 3
+ERR_CLEANUP_FAILED = 4
+ERR_GIT_NOT_FOUND = 5
+ERR_DOWNLOAD_FAILED = 6
+ERR_EXTRACTION_FAILED = 7
+ERR_INIT_FAILED = 8
+
+
+def initialize_repo(
+    dest: Path,
+    author_name: Optional[str],
+    author_email: Optional[str],
+    remote: Optional[str],
+) -> None:
+    """Initialize git repo with initial commit."""
+
+    def git(*args: str) -> None:
+        """Run git command in dest directory."""
+        run(["git", *args], cwd=str(dest), check=True)
+
+    git("init")
+
+    for key, value in [
+        ("user.name", author_name),
+        ("user.email", author_email),
+    ]:
+        if value:
+            git("config", key, value)
+
+    git("add", ".")
+    git("commit", "-m", "Initial commit")
+
+    if remote:
+        git("remote", "add", "origin", remote)
+        print(f"Set remote origin to {remote}")
+
+
+def download_zip(
+    owner: str, repo: str, ref: str, token: Optional[str], dest_path: Path
+) -> Path:
+    """Download the zip archive for owner/repo@ref."""
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/zipball/{ref}"
+    headers = {"Accept": "application/vnd.github+json"}
+
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    with get(url, headers=headers, stream=True, timeout=60) as r:
+        if r.status_code == 200:
+            zip_file = dest_path / f"{repo}-{ref}.zip"
+
+            with open(zip_file, "wb") as fh:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        fh.write(chunk)
+
+            return zip_file
+
+        raise (
+            RuntimeError(f"Unexpected redirect: {r.status_code}")
+            if r.status_code in (301, 302)
+            else (
+                FileNotFoundError(
+                    f"Archive for {owner}/{repo}@{ref} not found (404)."
+                )
+                if r.status_code == 404
+                else RuntimeError(
+                    f"Failed to download archive: {r.status_code} {r.text}"
+                )
+            )
+        )
+
+
+def extract_zip(zip_path: Path, dest_dir: Path) -> None:
+    """Extract zip archive to destination directory."""
+    with ZipFile(zip_path, "r") as zf:
+        if not zf.namelist():
+            raise RuntimeError("Zip archive is empty.")
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            zf.extractall(path=temp_path)
+            top_level_dirs = [p for p in temp_path.iterdir() if p.is_dir()]
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            source_dir = (
+                top_level_dirs[0] if len(top_level_dirs) == 1 else temp_path
+            )
+
+            for item in source_dir.iterdir():
+                target = dest_dir / item.name
+
+                if target.exists():
+                    rmtree(target) if target.is_dir() else target.unlink()
+
+                move(str(item), str(target))
+
+
+def parse_github_url(url: str) -> Tuple[str, str]:
+    """Parse GitHub URL and return (owner, repo), or raise ValueError
+    on failure.
+    """
+    url = url.strip().removesuffix(".git")
+
+    for r in [
+        r"https?://github\.com/([^/]+)/([^/]+)(/.*)?$",
+        r"git@github\.com:([^/]+)/([^/]+)$",
+        r"ssh://git@github\.com/([^/]+)/([^/]+)$",
+    ]:
+        m = match(r, url)
+
+        if m:
+            return m.group(1), m.group(2)
+
+    raise ValueError(f"Invalid GitHub URL: {url}")
+
+
+GITHUB_API = "https://api.github.com"
+
+
+def remove_embedded_git(dirpath: Path) -> None:
+    """Recursively remove any .git directories."""
+    for root, dirs, _ in walk(dirpath):
+        if ".git" in dirs:
+            git_dir = Path(root) / ".git"
+
+            try:
+                rmtree(git_dir)
+                print(f"Removed embedded .git at {git_dir}")
+
+            except OSError as e:
+                print(
+                    f"Warning: failed to remove embedded .git at "
+                    f"{git_dir}: {e}",
+                    file=stderr,
+                )
+
+
+def check_git_installed() -> None:
+    """Ensure git is available in PATH."""
+    try:
+        run(["git", "--version"], check=True, stdout=DEVNULL, stderr=DEVNULL)
+
+    except OSError as e:
+        raise EnvironmentError(
+            "git is not installed or not available in PATH."
+        ) from e

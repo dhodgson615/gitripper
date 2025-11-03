@@ -6,12 +6,9 @@ from zipfile import ZipFile
 from pytest import mark, raises
 from requests import RequestException
 
-from src.default_branch_getter import get_default_branch
-from src.git_utils import check_git_installed, remove_embedded_git
-from src.github_url_parser import parse_github_url
-from src.main import main
-from src.repo_initializer import initialize_repo
-from src.zip_utils import download_zip, extract_zip
+from src.main import (check_git_installed, download_zip, extract_zip,
+                      get_default_branch, initialize_repo, main,
+                      parse_github_url, remove_embedded_git)
 
 
 @mark.parametrize(
@@ -43,7 +40,7 @@ def test_parse_github_url_invalid(url: str) -> None:
         parse_github_url(url)
 
 
-@patch("src.default_branch_getter.get")
+@patch("src.main.get")
 def test_get_default_branch_success(mock_get: MagicMock) -> None:
     """Test successfully getting the default branch."""
     mock_response = MagicMock()
@@ -60,7 +57,7 @@ def test_get_default_branch_success(mock_get: MagicMock) -> None:
     )
 
 
-@patch("src.default_branch_getter.get")
+@patch("src.main.get")
 def test_get_default_branch_not_found(mock_get: MagicMock) -> None:
     """Test handling of a 404 error when getting the default branch."""
     mock_response = MagicMock()
@@ -71,7 +68,7 @@ def test_get_default_branch_not_found(mock_get: MagicMock) -> None:
         get_default_branch("owner", "repo", None)
 
 
-@patch("src.default_branch_getter.get")
+@patch("src.main.get")
 def test_get_default_branch_api_error(mock_get: MagicMock) -> None:
     """Test handling of a generic API error."""
     mock_response = MagicMock()
@@ -89,7 +86,7 @@ def test_get_default_branch_no_owner() -> None:
         get_default_branch(None, "repo", "token")
 
 
-@patch("src.zip_utils.get")
+@patch("src.main.get")
 def test_download_zip_success(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test successful download of a zip archive."""
     mock_response = MagicMock()
@@ -105,7 +102,7 @@ def test_download_zip_success(mock_get: MagicMock, tmp_path: Path) -> None:
     assert headers["Authorization"] == "token token"
 
 
-@patch("src.zip_utils.get")
+@patch("src.main.get")
 def test_download_zip_not_found(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test handling of a 404 error during zip download."""
     mock_response = MagicMock()
@@ -116,7 +113,7 @@ def test_download_zip_not_found(mock_get: MagicMock, tmp_path: Path) -> None:
         download_zip("owner", "repo", "main", None, tmp_path)
 
 
-@patch("src.zip_utils.get")
+@patch("src.main.get")
 def test_download_zip_error(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test handling of a generic error during zip download."""
     mock_response = MagicMock()
@@ -128,7 +125,7 @@ def test_download_zip_error(mock_get: MagicMock, tmp_path: Path) -> None:
         download_zip("owner", "repo", "main", None, tmp_path)
 
 
-@patch("src.zip_utils.get")
+@patch("src.main.get")
 def test_download_zip_redirect(mock_get: MagicMock, tmp_path: Path) -> None:
     """Test handling of a redirect during zip download."""
     mock_response = MagicMock()
@@ -177,7 +174,7 @@ def test_remove_embedded_git(tmp_path: Path) -> None:
     assert not git_dir.exists()
 
 
-@patch("src.git_utils.run")
+@patch("src.main.run")
 def test_check_git_installed_success(mock_run: MagicMock) -> None:
     """Test that check_git_installed passes when git is present."""
     check_git_installed()
@@ -185,7 +182,7 @@ def test_check_git_installed_success(mock_run: MagicMock) -> None:
     assert mock_run.call_args[0][0][0] == "git"
 
 
-@patch("src.git_utils.run", side_effect=FileNotFoundError)
+@patch("src.main.run", side_effect=FileNotFoundError)
 def test_check_git_installed_failure(mock_run: MagicMock) -> None:
     """Test that check_git_installed raises EnvironmentError when git
     is missing.
@@ -194,7 +191,7 @@ def test_check_git_installed_failure(mock_run: MagicMock) -> None:
         check_git_installed()
 
 
-@patch("src.repo_initializer.run")
+@patch("src.main.run")
 def test_initialize_repo(mock_run: MagicMock, tmp_path: Path) -> None:
     """Test the git repository initialization process."""
     author_name = "Test User"
