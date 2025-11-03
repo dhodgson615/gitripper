@@ -1,0 +1,23 @@
+[package]
+name = "gitripper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.51", features = ["derive"] }
+regex = "1.12.2"
+reqwest = { version = "0.12.24", features = ["blocking", "json", "gzip"] }
+serde_json = "1.0.145"
+anyhow = "1.0.100"
+tempfile = "3.23.0"
+zip = { version = "6.0.0", default-features = false, features = ["deflate"] }
+walkdir = "2.5.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+debug = "none"
+overflow-checks = false

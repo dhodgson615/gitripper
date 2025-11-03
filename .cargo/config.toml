@@ -1,0 +1,7 @@
+[build]
+rustflags = [
+    "-C", "target-cpu=native",
+    "-Cllvm-args=--inline-threshold=100000",
+    "-Cllvm-args=-unroll-threshold=10000",
+    "-C", "link-arg=-s",
+]
