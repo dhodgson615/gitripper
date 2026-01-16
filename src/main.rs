@@ -14,7 +14,7 @@ use std::{
 use anyhow::anyhow;
 use clap::Parser;
 use once_cell::sync::Lazy;
-use rayon::prelude::*; // added
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use reqwest::blocking::Client;
 use serde_json::{self};
 use tempfile::tempdir;
