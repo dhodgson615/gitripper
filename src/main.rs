@@ -50,8 +50,7 @@ const DEFAULT_README: &str = include_str!("../assets/DEFAULT_README.md");
 const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
 
-include!("./generated.rs");
-
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 #[cfg(feature = "zip")]
 fn zip_enabled() {
     println!("feature 'zip' is compiled in");

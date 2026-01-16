@@ -83,7 +83,7 @@ fn main() {
     };
 
     let zip_api_prefix = "https://api.github.com/repos/";
-    let out_path = var("CARGO_MANIFEST_DIR").unwrap() + "/src/generated.rs";
+    let out_path = var("OUT_DIR").unwrap() + "/generated.rs";
 
     let contents = format!(
         "pub const GIT_HASH_SHORT: &str = {:?};\n\
