@@ -14,6 +14,7 @@ use std::{
 use anyhow::anyhow;
 use clap::Parser;
 use once_cell::sync::Lazy;
+use rayon::prelude::*; // added
 use reqwest::blocking::Client;
 use serde_json::{self};
 use tempfile::tempdir;
@@ -508,22 +509,28 @@ fn _move_items_to_dest(
 }
 
 fn _copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    // Parallel recursive copy using WalkDir + rayon's par_bridge
     create_dir_all(dst)?;
-    for entry in WalkDir::new(src) {
-        let entry = entry?;
-        let rel = entry.path().strip_prefix(src)?;
-        let dest_path = dst.join(rel);
+    WalkDir::new(src)
+        .into_iter()
+        .filter_map(Result::ok)
+        .par_bridge()
+        .try_for_each(|entry| -> anyhow::Result<()> {
+            let rel = entry.path().strip_prefix(src)?;
+            let dest_path = dst.join(rel);
 
-        if entry.file_type().is_dir() {
-            create_dir_all(&dest_path)?;
-        } else {
+            if entry.file_type().is_dir() {
+                create_dir_all(&dest_path)?;
+                return Ok(());
+            }
+
             if let Some(parent) = dest_path.parent() {
                 create_dir_all(parent)?;
             }
 
             copy(entry.path(), &dest_path)?;
-        }
-    }
+            Ok(())
+        })?;
 
     Ok(())
 }
