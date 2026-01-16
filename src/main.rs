@@ -59,6 +59,11 @@ const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
 
 include!("./generated.rs");
 
+#[cfg(feature = "zip")]
+fn zip_enabled() {
+    println!("feature 'zip' is compiled in");
+}
+
 static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rs" => "text/rust",
     "md" => "text/markdown",
@@ -83,6 +88,16 @@ fn touch_compile_items() {
     let _ = BUILD_VERSION;
     let _ = OPTIONAL_FLAG;
     let _ = MIME_BY_EXT.get("md");
+
+    // runtime test of compile-time feature and show build-generated features
+    // CSV
+    if cfg!(feature = "zip") {
+        zip_enabled();
+    } else {
+        println!("feature 'zip' not enabled");
+    }
+
+    println!("BUILD_FEATURES_CSV = {}", BUILD_FEATURES_CSV);
 }
 
 #[derive(Parser, Debug)]
