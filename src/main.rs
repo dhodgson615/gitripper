@@ -19,6 +19,7 @@ use anyhow::anyhow;
 use clap::Parser;
 use env::var;
 use fs::{copy, rename};
+use once_cell::sync::Lazy;
 use process::exit;
 use reqwest::blocking::Client;
 use serde_json::{self};
@@ -30,6 +31,8 @@ const DEFAULT_BRANCH: &str = "main";
 const DEFAULT_COMMIT_MESSAGE: &str = "Initial commit";
 const TIMEOUT_GET_REPO_SECS: u64 = 30;
 const TIMEOUT_DOWNLOAD_SECS: u64 = 60;
+const TIMEOUT_GET_REPO: Duration = Duration::from_secs(TIMEOUT_GET_REPO_SECS);
+const TIMEOUT_DOWNLOAD: Duration = Duration::from_secs(TIMEOUT_DOWNLOAD_SECS);
 const ACCEPT_HEADER: &str = "application/vnd.github+json";
 const RE_GITHUB_PATTERN: &str = r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)";
 const ARCHIVE_PREFIX: &str = "archive-";
@@ -42,6 +45,17 @@ const ERR_GIT_NOT_FOUND: i32 = 5;
 const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
+
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .user_agent(USER_AGENT)
+        .build()
+        .expect("failed to build global HTTP client")
+});
+
+fn get_client() -> &'static Client {
+    &HTTP_CLIENT
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -94,7 +108,7 @@ fn run() -> Result<(), i32> {
     let dest = prepare_destination(&args, &repo)?;
     check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
 
-    let client = get_client().map_err(|_| ERR_DOWNLOAD_FAILED)?;
+    let client = get_client();
 
     let reference =
         determine_reference(&args, &client, &owner, &repo, token.as_deref());
@@ -172,10 +186,6 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
     Ok(dest)
 }
 
-fn get_client() -> Result<Client, ()> {
-    Client::builder().user_agent(USER_AGENT).build().map_err(|_| ())
-}
-
 fn determine_reference(
     args: &Args,
     client: &Client,
@@ -223,11 +233,8 @@ fn download_archive(
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
-    // Use a static Lazy regex built from the pattern constant
-    static RE_GITHUB: once_cell::sync::Lazy<regex::Regex> =
-        once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(RE_GITHUB_PATTERN).unwrap()
-        });
+    static RE_GITHUB: Lazy<regex::Regex> =
+        Lazy::new(|| regex::Regex::new(RE_GITHUB_PATTERN).unwrap());
 
     let mut s = url.trim().to_string();
 
@@ -257,16 +264,12 @@ fn get_default_branch(
         req = req.header("Authorization", format!("token {}", t));
     }
 
-    // use TIMEOUT_GET_REPO_SECS
-    let res = req
-        .timeout(std::time::Duration::from_secs(TIMEOUT_GET_REPO_SECS))
-        .send()?;
+    let res = req.timeout(TIMEOUT_GET_REPO).send()?;
 
     match res.status().as_u16() {
         200 => {
             let v: serde_json::Value = res.json()?;
 
-            // return DEFAULT_BRANCH when missing
             Ok(v.get("default_branch")
                 .and_then(|b| b.as_str())
                 .unwrap_or(DEFAULT_BRANCH)
@@ -290,22 +293,18 @@ fn download_zip(
     token: Option<&str>,
     dest_dir: &Path,
 ) -> anyhow::Result<PathBuf> {
-    // use ZIP_URL_FMT
     let url = format!(
         "https://api.github.com/repos/{}/{}/zipball/{}",
         owner, repo, reference
     );
 
-    // set Accept header constant
     let mut req = client.get(&url).header("Accept", ACCEPT_HEADER);
 
     if let Some(t) = token {
         req = req.header("Authorization", format!("token {}", t));
     }
 
-    // use TIMEOUT_DOWNLOAD_SECS
-    let mut resp =
-        req.timeout(Duration::from_secs(TIMEOUT_DOWNLOAD_SECS)).send()?;
+    let mut resp = req.timeout(TIMEOUT_DOWNLOAD).send()?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -325,13 +324,12 @@ fn download_zip(
     }
 
     let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-    // prefix filename with ARCHIVE_PREFIX
     let filename = format!("{}{}.zip", ARCHIVE_PREFIX, ts.as_nanos());
     let path = dest_dir.join(filename);
 
     {
         let mut outfile = File::create(&path)?;
-        std::io::copy(&mut resp, &mut outfile)?;
+        io::copy(&mut resp, &mut outfile)?;
     }
 
     Ok(path)
@@ -552,7 +550,6 @@ fn initialize_repo(
     }
 
     run_git(&["add", "."])?;
-    // use DEFAULT_COMMIT_MESSAGE
     run_git(&["commit", "-m", DEFAULT_COMMIT_MESSAGE])?;
 
     if let Some(r) = remote {
