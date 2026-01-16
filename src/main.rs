@@ -1,26 +1,30 @@
 use std::{
     env::var,
     fs::{
-        File, Permissions, copy, create_dir_all, remove_dir_all, remove_file,
-        rename, set_permissions,
+        File, Permissions, copy, create_dir_all, hard_link, remove_dir_all,
+        remove_file, rename, set_permissions,
     },
-    io::{self, Cursor, Read, Write, stdin, stdout},
+    io::{self, BufReader, Cursor, Read, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
     time::{Duration, SystemTime},
 };
 
+use WalkState::Continue;
 use anyhow::anyhow;
+use blake3::Hasher;
 use clap::Parser;
 use fs_extra::dir::{CopyOptions, copy as fs_extra_copy};
 use git2::{IndexAddOption, Repository, Signature};
-use ignore::{WalkBuilder, WalkState};
+use ignore::{DirEntry, Error, WalkBuilder, WalkState};
 use memmap2::MmapOptions;
 use once_cell::sync::Lazy;
+use phf::{Map, phf_map};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use regex::Regex;
 use reqwest::blocking::Client;
-use serde_json::{self};
+use serde_json::Value;
 use tempfile::tempdir;
 use zip::ZipArchive;
 
@@ -60,7 +64,12 @@ fn zip_enabled() {
     println!("feature 'zip' is compiled in");
 }
 
-static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
+#[cfg(feature = "gix")]
+fn gix_enabled() {
+    println!("feature 'gix' is compiled in");
+}
+
+static MIME_BY_EXT: Map<&'static str, &'static str> = phf_map! {
     "rs" => "text/rust",
     "md" => "text/markdown",
     "json" => "application/json",
@@ -85,8 +94,6 @@ fn touch_compile_items() {
     let _ = OPTIONAL_FLAG;
     let _ = MIME_BY_EXT.get("md");
 
-    // runtime test of compile-time feature and show build-generated features
-    // CSV
     if cfg!(feature = "zip") {
         zip_enabled();
     } else {
@@ -274,8 +281,8 @@ fn download_archive(
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
-    static RE_GITHUB: Lazy<regex::Regex> =
-        Lazy::new(|| regex::Regex::new(RE_GITHUB_PATTERN).unwrap());
+    static RE_GITHUB: Lazy<Regex> =
+        Lazy::new(|| Regex::new(RE_GITHUB_PATTERN).unwrap());
 
     let mut s = url.trim().to_string();
 
@@ -309,7 +316,7 @@ fn get_default_branch(
 
     match res.status().as_u16() {
         200 => {
-            let v: serde_json::Value = res.json()?;
+            let v: Value = res.json()?;
 
             Ok(v.get("default_branch")
                 .and_then(|b| b.as_str())
@@ -377,9 +384,6 @@ fn download_zip(
 }
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
-    // Use memory-mapped file for faster random access during zip extraction.
-    // This avoids additional system copies when ZipArchive seeks around the
-    // file.
     let f = File::open(zip_path)?;
     let mmap = unsafe { MmapOptions::new().map(&f)? };
     let cursor = Cursor::new(&mmap[..]);
@@ -390,8 +394,8 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         return Err(anyhow!("Zip archive is empty."));
     }
 
-    // Collect original entry paths first (to detect common root)
     let mut in_paths: Vec<PathBuf> = Vec::with_capacity(len);
+
     for i in 0..len {
         let file = archive.by_index(i)?;
         let p = file
@@ -401,7 +405,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         in_paths.push(p);
     }
 
-    // detect single-root prefix (common behavior of GitHub archives)
     let mut candidate: Option<String> = None;
     let mut all_same = true;
 
@@ -434,8 +437,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
 
     create_dir_all(dest_dir)?;
 
-    // First phase: read each entry into memory (sequential; ZipArchive requires
-    // &mut access)
     #[derive(Debug)]
     struct MemEntry {
         rel_path:  PathBuf,
@@ -467,7 +468,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         }
 
         if file.name().ends_with('/') {
-            // directory entry
             entries.push(MemEntry {
                 rel_path,
                 is_dir: true,
@@ -486,7 +486,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         }
     }
 
-    // Second phase: write entries in parallel
     entries.into_par_iter().try_for_each(|entry| -> anyhow::Result<()> {
         let outpath = dest_dir.join(&entry.rel_path);
 
@@ -515,27 +514,55 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    // Use fs_extra's optimized directory copy for better bulk-copy performance
-    // compared with a manual WalkDir + per-file copy approach.
     create_dir_all(dst)?;
 
     let mut options = CopyOptions::new();
-    // copy_inside = true makes the contents of `src` copied into `dst` (no
-    // extra parent dir)
     options.copy_inside = true;
     options.overwrite = true;
     options.skip_exist = false;
-    // allow copying file permissions, preserve timestamps etc if desired by
-    // configuring options
-
     fs_extra_copy(src, dst, &options).map(|_bytes| ()).map_err(|e| anyhow!(e))
+}
+
+fn compute_blake3_hex(path: &Path) -> anyhow::Result<String> {
+    // Try to use a memory map for large/regular files which is typically faster
+    // than copying via a buffered reader. If mmap fails for any reason, fall
+    // back to the buffered reader method for robustness.
+    let f = File::open(path)?;
+    let metadata = f.metadata()?;
+    if metadata.len() > 0 {
+        // Safety: mapping a file that is not concurrently truncated is okay for
+        // our use.
+        match unsafe { MmapOptions::new().map(&f) } {
+            Ok(mmap) => {
+                let mut hasher = Hasher::new();
+                hasher.update(&mmap[..]);
+                return Ok(hasher.finalize().to_hex().to_string());
+            },
+            Err(_) => {
+                // fallthrough to buffered read on mmap failure
+            },
+        }
+    }
+
+    // Fallback: buffered read (keeps original behavior for empty files or mmap
+    // failures)
+    let mut reader = BufReader::with_capacity(8192, f);
+    let mut hasher = Hasher::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn move_items_to_dest(
     items: Vec<PathBuf>,
     dest_dir: &Path,
 ) -> anyhow::Result<()> {
-    // Parallelize per-item operations. Each item is independent.
     items.into_par_iter().try_for_each(|src| -> anyhow::Result<()> {
         let name =
             src.file_name().ok_or_else(|| anyhow!("Invalid source name"))?;
@@ -546,7 +573,13 @@ fn move_items_to_dest(
             if target.is_dir() {
                 remove_dir_all(&target)?;
             } else {
-                remove_file(&target)?;
+                match (compute_blake3_hex(&src), compute_blake3_hex(&target)) {
+                    (Ok(src_hash), Ok(tgt_hash)) if src_hash == tgt_hash => {
+                        let _ = remove_file(&src);
+                        return Ok(());
+                    },
+                    _ => remove_file(&target)?,
+                }
             }
         }
 
@@ -561,9 +594,18 @@ fn move_items_to_dest(
                     if let Some(parent) = target.parent() {
                         create_dir_all(parent)?;
                     }
-                    copy(&src, &target)?;
-                    let _ = remove_file(&src);
-                    Ok(())
+
+                    match hard_link(&src, &target) {
+                        Ok(_) => {
+                            let _ = remove_file(&src);
+                            Ok(())
+                        },
+                        Err(_) => {
+                            copy(&src, &target)?;
+                            let _ = remove_file(&src);
+                            Ok(())
+                        },
+                    }
                 }
             },
         }
@@ -573,18 +615,13 @@ fn move_items_to_dest(
 }
 
 fn remove_embedded_git(dirpath: &Path) {
-    // Use `ignore`'s parallel walker for faster traversal than WalkDir +
-    // collecting. WalkBuilder can run a callback in parallel threads and
-    // will visit entries efficiently; ensure we include hidden/git dirs by
-    // disabling standard filters.
     let mut builder = WalkBuilder::new(dirpath);
     builder.standard_filters(false).hidden(false);
 
     builder.build_parallel().run(|| {
-        Box::new(|res: Result<ignore::DirEntry, ignore::Error>| {
+        Box::new(|res: Result<DirEntry, Error>| {
             match res {
                 Ok(entry) => {
-                    // Only interested in directories named ".git"
                     if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
                         && entry.file_name() == ".git"
                     {
@@ -607,7 +644,7 @@ fn remove_embedded_git(dirpath: &Path) {
                     eprintln!("Warning: walker error: {}", e);
                 }
             }
-            WalkState::Continue
+            Continue
         })
     });
 }
@@ -630,12 +667,8 @@ fn initialize_repo(
     author_email: Option<&str>,
     remote: Option<&str>,
 ) -> anyhow::Result<()> {
-    // Use git2 to initialize repo, configure user, stage and commit, and add
-    // remote. This avoids spawning the `git` binary and is typically faster
-    // and more robust.
     let repo = Repository::init(dest)?;
 
-    // Configure user.name/user.email if provided
     if let Some(name) = author_name {
         let mut cfg = repo.config()?;
         cfg.set_str("user.name", name)?;
@@ -645,21 +678,17 @@ fn initialize_repo(
         cfg.set_str("user.email", email)?;
     }
 
-    // Stage all files
     let mut index = repo.index()?;
-    // Add all files (recursive)
     index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
     index.write()?;
 
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
 
-    // Signature for commit: prefer provided name/email, fall back to defaults.
     let sig_name = author_name.unwrap_or("gitripper");
     let sig_email = author_email.unwrap_or("gitripper@localhost");
     let signature = Signature::now(sig_name, sig_email)?;
 
-    // Create initial commit with no parents
     repo.commit(
         Some("HEAD"),
         &signature,
@@ -678,11 +707,7 @@ fn initialize_repo(
 }
 
 /* TODO: Potential optimizations / alternative crates to consider
-      gix — high‑performance, pure‑Rust git implementation (faster than spawning git or libgit2 for many tasks).
       tokio + reqwest (async) — overlap network + disk work and parallelize downloads/IO.
       isahc or curl — libcurl-based clients that can be faster and more featureful for many concurrent connections.
-      hyper + hyper-tls — low-level, very fast HTTP client when you need max throughput/control.
-      rayon — already used; continue for parallel CPU/disk work (file copies, extraction steps).
       async-compression — for async decompression pipelines if you move to async extraction.
-      blake3 — very fast hashing if you need content dedup/checksumming.
 */

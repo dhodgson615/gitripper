@@ -18,6 +18,8 @@ fs_extra = "1.3.0"
 git2 = "0.20.3"
 memmap2 = "0.9.9"
 ignore = "0.4.25"
+blake3 = "1.3.1"
+gix = { version = "0.77.0"}
 
 [profile.release]
 opt-level = 3
@@ -30,5 +32,4 @@ overflow-checks = false
 
 [features]
 zip = ["dep:zip"]
-my-feature = []
 default = ["zip"]
