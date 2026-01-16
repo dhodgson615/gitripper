@@ -77,20 +77,9 @@ fn main() {
 }
 
 fn run() -> Result<(), i32> {
-    let args = Args::parse();
-    let token = args.token.or_else(|| var("GITHUB_TOKEN").ok());
-
-    let url = match args.url {
-        Some(u) => u,
-        None => {
-            print!("Enter repository URL: ");
-            stdout().flush().ok();
-            let mut input = String::new();
-            stdin().read_line(&mut input).map_err(|_| ERR_INVALID_URL)?;
-            input.trim().to_string()
-        },
-    };
-
+    let mut args = Args::parse();
+    let token = args.token.take().or_else(|| var("GITHUB_TOKEN").ok());
+    let url = read_url_from_args(&args)?;
     let (owner, repo) = parse_github_url(&url).map_err(|_| ERR_INVALID_URL)?;
 
     if owner.is_empty() || repo.is_empty() {
