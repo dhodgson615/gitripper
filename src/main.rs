@@ -524,31 +524,23 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
 }
 
 fn compute_blake3_hex(path: &Path) -> anyhow::Result<String> {
-    // Try to use a memory map for large/regular files which is typically faster
-    // than copying via a buffered reader. If mmap fails for any reason, fall
-    // back to the buffered reader method for robustness.
     let f = File::open(path)?;
     let metadata = f.metadata()?;
     if metadata.len() > 0 {
-        // Safety: mapping a file that is not concurrently truncated is okay for
-        // our use.
         match unsafe { MmapOptions::new().map(&f) } {
             Ok(mmap) => {
                 let mut hasher = Hasher::new();
                 hasher.update(&mmap[..]);
                 return Ok(hasher.finalize().to_hex().to_string());
             },
-            Err(_) => {
-                // fallthrough to buffered read on mmap failure
-            },
+            Err(_) => {},
         }
     }
 
-    // Fallback: buffered read (keeps original behavior for empty files or mmap
-    // failures)
     let mut reader = BufReader::with_capacity(8192, f);
     let mut hasher = Hasher::new();
     let mut buf = [0u8; 8192];
+
     loop {
         let n = reader.read(&mut buf)?;
         if n == 0 {
