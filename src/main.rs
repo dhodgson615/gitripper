@@ -4,7 +4,7 @@ use std::{
         File, Permissions, copy, create_dir_all, remove_dir_all, remove_file,
         rename, set_permissions,
     },
-    io::{self, Write, stdin, stdout},
+    io::{self, Read, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
@@ -13,8 +13,11 @@ use std::{
 
 use anyhow::anyhow;
 use clap::Parser;
+use fs_extra::dir::{CopyOptions, copy as fs_extra_copy};
 use once_cell::sync::Lazy;
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::iter::{
+    IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 use reqwest::blocking::Client;
 use serde_json::{self};
 use tempfile::tempdir;
@@ -382,18 +385,18 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         return Err(anyhow!("Zip archive is empty."));
     }
 
+    // Collect original entry paths first (to detect common root)
     let mut in_paths: Vec<PathBuf> = Vec::with_capacity(len);
     for i in 0..len {
         let file = archive.by_index(i)?;
-
         let p = file
             .enclosed_name()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from(file.name()));
-
         in_paths.push(p);
     }
 
+    // detect single-root prefix (common behavior of GitHub archives)
     let mut candidate: Option<String> = None;
     let mut all_same = true;
 
@@ -426,6 +429,17 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
 
     create_dir_all(dest_dir)?;
 
+    // First phase: read each entry into memory (sequential; ZipArchive requires
+    // &mut access)
+    #[derive(Debug)]
+    struct MemEntry {
+        rel_path:  PathBuf,
+        is_dir:    bool,
+        data:      Option<Vec<u8>>,
+        unix_mode: Option<u32>,
+    }
+
+    let mut entries: Vec<MemEntry> = Vec::with_capacity(len);
     for i in 0..len {
         let mut file = archive.by_index(i)?;
 
@@ -447,35 +461,77 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
             continue;
         }
 
-        let outpath = dest_dir.join(&rel_path);
-
         if file.name().ends_with('/') {
+            // directory entry
+            entries.push(MemEntry {
+                rel_path,
+                is_dir: true,
+                data: None,
+                unix_mode: file.unix_mode(),
+            });
+        } else {
+            let mut buf: Vec<u8> = Vec::with_capacity(file.size() as usize);
+            file.read_to_end(&mut buf)?;
+            entries.push(MemEntry {
+                rel_path,
+                is_dir: false,
+                data: Some(buf),
+                unix_mode: file.unix_mode(),
+            });
+        }
+    }
+
+    // Second phase: write entries in parallel
+    entries.into_par_iter().try_for_each(|entry| -> anyhow::Result<()> {
+        let outpath = dest_dir.join(&entry.rel_path);
+
+        if entry.is_dir {
             create_dir_all(&outpath)?;
         } else {
             if let Some(parent) = outpath.parent() {
                 create_dir_all(parent)?;
             }
-
             let mut outfile = File::create(&outpath)?;
-            io::copy(&mut file, &mut outfile)?;
-        }
-
-        #[cfg(unix)]
-        {
-            if let Some(mode) = file.unix_mode() {
-                let _ = set_permissions(&outpath, Permissions::from_mode(mode));
+            if let Some(ref data) = entry.data {
+                outfile.write_all(data)?;
+            }
+            #[cfg(unix)]
+            {
+                if let Some(mode) = entry.unix_mode {
+                    let _ =
+                        set_permissions(&outpath, Permissions::from_mode(mode));
+                }
             }
         }
-    }
+        Ok(())
+    })?;
 
     Ok(())
 }
 
-fn _move_items_to_dest(
+fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    // Use fs_extra's optimized directory copy for better bulk-copy performance
+    // compared with a manual WalkDir + per-file copy approach.
+    create_dir_all(dst)?;
+
+    let mut options = CopyOptions::new();
+    // copy_inside = true makes the contents of `src` copied into `dst` (no
+    // extra parent dir)
+    options.copy_inside = true;
+    options.overwrite = true;
+    options.skip_exist = false;
+    // allow copying file permissions, preserve timestamps etc if desired by
+    // configuring options
+
+    fs_extra_copy(src, dst, &options).map(|_bytes| ()).map_err(|e| anyhow!(e))
+}
+
+fn move_items_to_dest(
     items: Vec<PathBuf>,
     dest_dir: &Path,
 ) -> anyhow::Result<()> {
-    for src in items {
+    // Parallelize per-item operations. Each item is independent.
+    items.into_par_iter().try_for_each(|src| -> anyhow::Result<()> {
         let name =
             src.file_name().ok_or_else(|| anyhow!("Invalid source name"))?;
 
@@ -490,68 +546,51 @@ fn _move_items_to_dest(
         }
 
         match rename(&src, &target) {
-            Ok(_) => continue,
+            Ok(_) => Ok(()),
             Err(_) => {
                 if src.is_dir() {
-                    _copy_dir_recursive(&src, &target)?;
+                    copy_dir_recursive(&src, &target)?;
                     remove_dir_all(&src)?;
+                    Ok(())
                 } else {
                     if let Some(parent) = target.parent() {
                         create_dir_all(parent)?;
                     }
                     copy(&src, &target)?;
                     let _ = remove_file(&src);
+                    Ok(())
                 }
             },
         }
-    }
-    Ok(())
-}
-
-fn _copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    // Parallel recursive copy using WalkDir + rayon's par_bridge
-    create_dir_all(dst)?;
-    WalkDir::new(src)
-        .into_iter()
-        .filter_map(Result::ok)
-        .par_bridge()
-        .try_for_each(|entry| -> anyhow::Result<()> {
-            let rel = entry.path().strip_prefix(src)?;
-            let dest_path = dst.join(rel);
-
-            if entry.file_type().is_dir() {
-                create_dir_all(&dest_path)?;
-                return Ok(());
-            }
-
-            if let Some(parent) = dest_path.parent() {
-                create_dir_all(parent)?;
-            }
-
-            copy(entry.path(), &dest_path)?;
-            Ok(())
-        })?;
+    })?;
 
     Ok(())
 }
 
 fn remove_embedded_git(dirpath: &Path) {
-    for entry in
-        WalkDir::new(dirpath).min_depth(1).into_iter().filter_map(Result::ok)
-    {
-        if entry.file_type().is_dir() && entry.file_name() == ".git" {
-            let git_dir = entry.into_path();
-            if let Err(e) = remove_dir_all(&git_dir) {
-                eprintln!(
-                    "Warning: failed to remove embedded .git at {}: {}",
-                    git_dir.display(),
-                    e
-                );
-            } else {
-                println!("Removed embedded .git at {}", git_dir.display());
-            }
+    // collect .git directories first (to avoid mutating WalkDir while
+    // iterating), then remove them in parallel.
+    let git_dirs: Vec<PathBuf> = WalkDir::new(dirpath)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_dir() && entry.file_name() == ".git"
+        })
+        .map(|entry| entry.into_path())
+        .collect();
+
+    git_dirs.par_iter().for_each(|git_dir| {
+        if let Err(e) = remove_dir_all(git_dir) {
+            eprintln!(
+                "Warning: failed to remove embedded .git at {}: {}",
+                git_dir.display(),
+                e
+            );
+        } else {
+            println!("Removed embedded .git at {}", git_dir.display());
         }
-    }
+    });
 }
 
 fn check_git_installed() -> Result<(), ()> {
@@ -602,3 +641,16 @@ fn initialize_repo(
     }
     Ok(())
 }
+
+/* TODO: Potential optimizations / alternative crates to consider
+      gix — high‑performance, pure‑Rust git implementation (faster than spawning git or libgit2 for many tasks).
+      git2 — libgit2 bindings (good for shallow fetch/checkout instead of downloading ZIPs).
+      tokio + reqwest (async) — overlap network + disk work and parallelize downloads/IO.
+      isahc or curl — libcurl-based clients that can be faster and more featureful for many concurrent connections.
+      hyper + hyper-tls — low-level, very fast HTTP client when you need max throughput/control.
+      rayon — already used; continue for parallel CPU/disk work (file copies, extraction steps).
+      ignore — provides WalkParallel which can be faster than WalkDir + par_bridge.
+      memmap2 — memory‑map large files to speed copying or extraction where applicable.
+      async-compression — for async decompression pipelines if you move to async extraction.
+      blake3 — very fast hashing if you need content dedup/checksumming.
+*/
