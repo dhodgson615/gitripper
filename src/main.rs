@@ -228,6 +228,7 @@ fn get_default_branch(
     }
 
     let res = req.timeout(Duration::from_secs(30)).send()?;
+
     match res.status().as_u16() {
         200 => {
             let v: Value = res.json()?;
@@ -299,46 +300,47 @@ fn download_zip(
 }
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
-    // TODO: this function needs to be optimized, possibly by using a single
-    //       pass extraction
     let f = File::open(zip_path)?;
     let mut archive = ZipArchive::new(f)?;
-
     let len = archive.len();
+
     if len == 0 {
         return Err(anyhow!("Zip archive is empty."));
+    }
+
+    let mut in_paths: Vec<PathBuf> = Vec::with_capacity(len);
+    for i in 0..len {
+        let file = archive.by_index(i)?;
+
+        let p = file
+            .enclosed_name()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(file.name()));
+
+        in_paths.push(p);
     }
 
     let mut candidate: Option<String> = None;
     let mut all_same = true;
 
-    for i in 0..len {
-        let file = archive.by_index(i)?;
-
-        let first_comp_opt = file
-            .enclosed_name()
-            .and_then(|p| {
-                p.components()
-                    .next()
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
-            })
-            .or_else(|| {
-                let raw = file.name();
-                raw.split('/').next().and_then(|s| {
-                    if s.is_empty() { None } else { Some(s.to_string()) }
-                })
-            });
-
-        if let Some(fc) = first_comp_opt {
-            if candidate.is_none() {
-                candidate = Some(fc);
-            } else if candidate.as_ref().map(|c| c != &fc).unwrap_or(false) {
+    for p in &in_paths {
+        if let Some(first) = p.components().next() {
+            let s = first.as_os_str().to_string_lossy().into_owned();
+            if s.is_empty() {
                 all_same = false;
+                break;
+            }
+            if let Some(ref c) = candidate {
+                if c != &s {
+                    all_same = false;
+                    break;
+                }
+            } else {
+                candidate = Some(s);
             }
         } else {
-            if candidate.is_some() {
-                all_same = false;
-            }
+            all_same = false;
+            break;
         }
     }
 
@@ -353,9 +355,9 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
     for i in 0..len {
         let mut file = archive.by_index(i)?;
 
-        let in_path = file
-            .enclosed_name()
-            .map(|p| p.to_path_buf())
+        let in_path = in_paths
+            .get(i)
+            .cloned()
             .unwrap_or_else(|| PathBuf::from(file.name()));
 
         let rel_path = if let Some(ref root) = root_prefix {
