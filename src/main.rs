@@ -12,7 +12,7 @@ use std::{
     process::{
         Command, Stdio, {self},
     },
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use anyhow::anyhow;
@@ -26,7 +26,7 @@ use reqwest::blocking::Client;
 use serde_json::{
     Value, {self},
 };
-use tempfile::{NamedTempFile, tempdir};
+use tempfile::tempdir;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -286,10 +286,10 @@ fn download_zip(
         };
     }
 
-    let tmpfile = NamedTempFile::new_in(dest_dir)?;
-    let path = tmpfile.path().with_extension("zip");
+    let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let filename = format!("archive-{}.zip", ts.as_nanos());
+    let path = dest_dir.join(filename);
 
-    // Write response bytes into the created file using std::io::copy
     {
         let mut outfile = File::create(&path)?;
         io::copy(&mut resp, &mut outfile)?;
@@ -304,58 +304,53 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
     let f = File::open(zip_path)?;
     let mut archive = ZipArchive::new(f)?;
 
-    if archive.len() == 0 {
+    let len = archive.len();
+    if len == 0 {
         return Err(anyhow!("Zip archive is empty."));
     }
 
-    let mut candidate: Option<PathBuf> = None;
+    let mut candidate: Option<String> = None;
+    let mut all_same = true;
 
-    for i in 0..archive.len() {
+    for i in 0..len {
         let file = archive.by_index(i)?;
 
-        let first_comp = file.enclosed_name().and_then(|p| {
-            p.components().next().map(|c| c.as_os_str().to_os_string())
-        });
+        let first_comp_opt = file
+            .enclosed_name()
+            .and_then(|p| {
+                p.components()
+                    .next()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            })
+            .or_else(|| {
+                let raw = file.name();
+                raw.split('/').next().and_then(|s| {
+                    if s.is_empty() { None } else { Some(s.to_string()) }
+                })
+            });
 
-        if let Some(fc) = first_comp {
-            if !fc.is_empty() {
-                candidate = Some(PathBuf::from(fc));
-                break;
+        if let Some(fc) = first_comp_opt {
+            if candidate.is_none() {
+                candidate = Some(fc);
+            } else if candidate.as_ref().map(|c| c != &fc).unwrap_or(false) {
+                all_same = false;
             }
         } else {
-            let raw = file.name();
-            let first = raw.split('/').next().unwrap_or("");
-
-            if !first.is_empty() {
-                candidate = Some(PathBuf::from(first));
-                break;
+            if candidate.is_some() {
+                all_same = false;
             }
         }
     }
 
-    let root_prefix = if let Some(ref cand) = candidate {
-        let all_same = (0..archive.len()).all(|i| {
-            if let Ok(file) = archive.by_index(i) {
-                if let Some(p) = file.enclosed_name() {
-                    if let Some(comp) = p.components().next() {
-                        return comp.as_os_str() == cand.as_os_str();
-                    }
-                } else {
-                    let raw = file.name();
-                    return raw.split('/').next().unwrap_or("")
-                        == cand.to_string_lossy();
-                }
-            }
-            true
-        });
-        if all_same { Some(cand.clone()) } else { None }
+    let root_prefix: Option<PathBuf> = if let Some(ref cand) = candidate {
+        if all_same { Some(PathBuf::from(cand)) } else { None }
     } else {
         None
     };
 
     create_dir_all(dest_dir)?;
 
-    for i in 0..archive.len() {
+    for i in 0..len {
         let mut file = archive.by_index(i)?;
 
         let in_path = file
