@@ -1,23 +1,32 @@
-use ::serde_json;
+use std::{
+    env,
+    fs::{
+        File, Permissions, create_dir_all, remove_dir_all, remove_file,
+        set_permissions, {self},
+    },
+    io::{
+        Write, stdin, stdout, {self},
+    },
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    process::{
+        Command, Stdio, {self},
+    },
+    time::Duration,
+};
+
 use anyhow::anyhow;
 use clap::Parser;
 use env::var;
-use fs::{create_dir_all, read_dir, remove_dir_all, remove_file, set_permissions, Permissions};
-use io::{stdin, stdout};
+use fs::{copy, rename};
+use once_cell::sync::Lazy;
 use process::exit;
 use regex::Regex;
 use reqwest::blocking::Client;
-use std::{
-    env,
-    fs::{self, File},
-    io::{self, copy, Write},
-    path::{Path, PathBuf},
-    process,
-    process::{Command, Stdio},
-    time,
+use serde_json::{
+    Value, {self},
 };
-use tempfile::tempdir;
-use time::Duration;
+use tempfile::{NamedTempFile, tempdir};
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -79,7 +88,7 @@ fn run() -> Result<(), i32> {
             let mut input = String::new();
             stdin().read_line(&mut input).map_err(|_| ERR_INVALID_URL)?;
             input.trim().to_string()
-        }
+        },
     };
 
     let (owner, repo) = parse_github_url(&url).map_err(|_| ERR_INVALID_URL)?;
@@ -94,10 +103,9 @@ fn run() -> Result<(), i32> {
         .clone()
         .unwrap_or_else(|| PathBuf::from(format!("{}-copy", repo)));
     if dest.exists() {
-        let not_empty = dest
-            .read_dir()
-            .map(|mut rd| rd.next().is_some())
-            .unwrap_or(false);
+        let not_empty =
+            dest.read_dir().map(|mut rd| rd.next().is_some()).unwrap_or(false);
+
         if not_empty && !args.force {
             eprintln!(
                 "Destination '{}' exists and is not empty. Use --force to overwrite.",
@@ -105,6 +113,7 @@ fn run() -> Result<(), i32> {
             );
             return Err(ERR_DEST_EXISTS);
         }
+
         if args.force {
             remove_dir_all(&dest).map_err(|_| ERR_CLEANUP_FAILED)?;
         }
@@ -112,34 +121,52 @@ fn run() -> Result<(), i32> {
 
     check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
 
+    let client = Client::builder()
+        .user_agent("gitripper/0.1")
+        .build()
+        .map_err(|_| ERR_DOWNLOAD_FAILED)?;
+
     let mut reference = args.branch.clone();
+
     if reference.is_none() {
-        match get_default_branch(&owner, &repo, token.as_deref()) {
+        match get_default_branch(&client, &owner, &repo, token.as_deref()) {
             Ok(b) => {
                 reference = Some(b);
-                println!("Using default branch '{}'", reference.as_ref().unwrap());
-            }
+                println!(
+                    "Using default branch '{}'",
+                    reference.as_ref().unwrap()
+                );
+            },
+
             Err(e) => {
                 eprintln!(
                     "Warning: could not determine default branch: {}. Using 'main'.",
                     e
                 );
                 reference = Some("main".to_string());
-            }
+            },
         }
     }
-    let reference = reference.unwrap();
 
+    let reference = reference.unwrap();
     let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
-    let zip_path = match download_zip(&owner, &repo, &reference, token.as_deref(), tmp.path()) {
+
+    let zip_path = match download_zip(
+        &client,
+        &owner,
+        &repo,
+        &reference,
+        token.as_deref(),
+        tmp.path(),
+    ) {
         Ok(p) => {
             println!("Downloaded archive to {}", p.display());
             p
-        }
+        },
         Err(e) => {
             eprintln!("Failed to download repository archive: {}", e);
             return Err(ERR_DOWNLOAD_FAILED);
-        }
+        },
     };
 
     if let Err(e) = extract_zip(&zip_path, &dest) {
@@ -148,8 +175,8 @@ fn run() -> Result<(), i32> {
     }
 
     remove_embedded_git(&dest);
-
     println!("Initializing new git repository...");
+
     if let Err(e) = initialize_repo(
         &dest,
         args.author_name.as_deref(),
@@ -166,54 +193,83 @@ fn run() -> Result<(), i32> {
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
+    static RE_GITHUB: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)"
+        ).unwrap()
+    });
+
     let mut s = url.trim().to_string();
+
     if let Some(stripped) = s.strip_suffix(".git") {
         s = stripped.to_string();
     }
 
-    let patterns = [
-        r"^https?://github\.com/([^/]+)/([^/]+)(/.*)?$",
-        r"^git@github\.com:([^/]+)/([^/]+)$",
-        r"^ssh://git@github\.com/([^/]+)/([^/]+)$",
-    ];
-
-    for pat in patterns {
-        let re = Regex::new(pat).unwrap();
-        if let Some(caps) = re.captures(&s) {
-            let owner = caps
-                .get(1)
-                .map(|m| m.as_str().to_string())
-                .unwrap_or_default();
-            let repo = caps
-                .get(2)
-                .map(|m| m.as_str().to_string())
-                .unwrap_or_default();
-            return Ok((owner, repo));
-        }
+    if let Some(caps) = RE_GITHUB.captures(&s) {
+        let owner = caps.get(1).unwrap().as_str().to_string();
+        let repo = caps.get(2).unwrap().as_str().to_string();
+        Ok((owner, repo))
+    } else {
+        Err("Invalid GitHub URL")
     }
-    Err("Invalid GitHub URL")
+}
+
+fn get_default_branch(
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    token: Option<&str>,
+) -> anyhow::Result<String> {
+    let url = format!("{}/repos/{}/{}", GITHUB_API, owner, repo);
+    let mut req = client.get(&url);
+
+    if let Some(t) = token {
+        req = req.header("Authorization", format!("token {}", t));
+    }
+
+    let res = req.timeout(Duration::from_secs(30)).send()?;
+    match res.status().as_u16() {
+        200 => {
+            let v: Value = res.json()?;
+
+            Ok(v.get("default_branch")
+                .and_then(|b| b.as_str())
+                .unwrap_or("main")
+                .to_string())
+        },
+
+        404 => Err(anyhow!("Repository {}/{} not found (404).", owner, repo)),
+        s => {
+            let txt = res.text().unwrap_or_default();
+            Err(anyhow!("Failed to get repo info: {} {}", s, txt))
+        },
+    }
 }
 
 fn download_zip(
+    // TODO: this function might be broken, do we need `NamedTempFile`?
+    client: &Client,
     owner: &str,
     repo: &str,
     reference: &str,
     token: Option<&str>,
     dest_dir: &Path,
 ) -> anyhow::Result<PathBuf> {
-    let client = Client::builder().user_agent("gitripper/0.1").build()?;
     let url = format!(
         "{}/repos/{}/{}/zipball/{}",
         GITHUB_API, owner, repo, reference
     );
-    let mut req = client
-        .get(&url)
-        .header("Accept", "application/vnd.github+json");
+
+    let mut req =
+        client.get(&url).header("Accept", "application/vnd.github+json");
+
     if let Some(t) = token {
         req = req.header("Authorization", format!("token {}", t));
     }
+
     let mut resp = req.timeout(Duration::from_secs(60)).send()?;
     let status = resp.status();
+
     if !status.is_success() {
         return if status.as_u16() == 404 {
             Err(anyhow!(
@@ -229,28 +285,98 @@ fn download_zip(
             Err(anyhow!("Failed to download archive: {} {}", status, txt))
         };
     }
-    let zip_file = dest_dir.join(format!("{}-{}.zip", repo, reference));
-    let mut out = File::create(&zip_file)?;
-    copy(&mut resp, &mut out)?;
-    Ok(zip_file)
+
+    let tmpfile = NamedTempFile::new_in(dest_dir)?;
+    let path = tmpfile.path().with_extension("zip");
+
+    // Write response bytes into the created file using std::io::copy
+    {
+        let mut outfile = File::create(&path)?;
+        io::copy(&mut resp, &mut outfile)?;
+    }
+
+    Ok(path)
 }
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
+    // TODO: this function needs to be optimized, possibly by using a single
+    //       pass extraction
     let f = File::open(zip_path)?;
     let mut archive = ZipArchive::new(f)?;
+
     if archive.len() == 0 {
         return Err(anyhow!("Zip archive is empty."));
     }
 
-    let temp = tempdir()?;
-    let temp_path = temp.path();
+    let mut candidate: Option<PathBuf> = None;
+
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+
+        let first_comp = file.enclosed_name().and_then(|p| {
+            p.components().next().map(|c| c.as_os_str().to_os_string())
+        });
+
+        if let Some(fc) = first_comp {
+            if !fc.is_empty() {
+                candidate = Some(PathBuf::from(fc));
+                break;
+            }
+        } else {
+            let raw = file.name();
+            let first = raw.split('/').next().unwrap_or("");
+
+            if !first.is_empty() {
+                candidate = Some(PathBuf::from(first));
+                break;
+            }
+        }
+    }
+
+    let root_prefix = if let Some(ref cand) = candidate {
+        let all_same = (0..archive.len()).all(|i| {
+            if let Ok(file) = archive.by_index(i) {
+                if let Some(p) = file.enclosed_name() {
+                    if let Some(comp) = p.components().next() {
+                        return comp.as_os_str() == cand.as_os_str();
+                    }
+                } else {
+                    let raw = file.name();
+                    return raw.split('/').next().unwrap_or("")
+                        == cand.to_string_lossy();
+                }
+            }
+            true
+        });
+        if all_same { Some(cand.clone()) } else { None }
+    } else {
+        None
+    };
+
+    create_dir_all(dest_dir)?;
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let outpath = match file.enclosed_name() {
-            Some(p) => temp_path.join(p),
-            None => temp_path.join(file.name()),
+
+        let in_path = file
+            .enclosed_name()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(file.name()));
+
+        let rel_path = if let Some(ref root) = root_prefix {
+            match in_path.strip_prefix(root) {
+                Ok(p) => p.to_path_buf(),
+                Err(_) => in_path.clone(),
+            }
+        } else {
+            in_path.clone()
         };
+
+        if rel_path.as_os_str().is_empty() {
+            continue;
+        }
+
+        let outpath = dest_dir.join(&rel_path);
 
         if file.name().ends_with('/') {
             create_dir_all(&outpath)?;
@@ -258,42 +384,30 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
             if let Some(parent) = outpath.parent() {
                 create_dir_all(parent)?;
             }
+
             let mut outfile = File::create(&outpath)?;
-            copy(&mut file, &mut outfile)?;
+            io::copy(&mut file, &mut outfile)?;
         }
 
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = file.unix_mode() {
                 let _ = set_permissions(&outpath, Permissions::from_mode(mode));
             }
         }
     }
 
-    let top_entries: Vec<PathBuf> = read_dir(temp_path)?
-        .filter_map(|r| r.ok().map(|e| e.path()))
-        .collect();
-
-    let source_items = if top_entries.len() == 1 && top_entries[0].is_dir() {
-        read_dir(&top_entries[0])?
-            .map(|r| r.map(|e| e.path()))
-            .collect::<Result<Vec<_>, io::Error>>()?
-    } else {
-        top_entries
-    };
-
-    create_dir_all(dest_dir)?;
-    move_items_to_dest(source_items, dest_dir)?;
-
     Ok(())
 }
 
-fn move_items_to_dest(items: Vec<PathBuf>, dest_dir: &Path) -> anyhow::Result<()> {
+fn _move_items_to_dest(
+    items: Vec<PathBuf>,
+    dest_dir: &Path,
+) -> anyhow::Result<()> {
     for src in items {
-        let name = src
-            .file_name()
-            .ok_or_else(|| anyhow!("Invalid source name"))?;
+        let name =
+            src.file_name().ok_or_else(|| anyhow!("Invalid source name"))?;
+
         let target = dest_dir.join(name);
 
         if target.exists() {
@@ -304,26 +418,26 @@ fn move_items_to_dest(items: Vec<PathBuf>, dest_dir: &Path) -> anyhow::Result<()
             }
         }
 
-        match fs::rename(&src, &target) {
+        match rename(&src, &target) {
             Ok(_) => continue,
             Err(_) => {
                 if src.is_dir() {
-                    copy_dir_recursive(&src, &target)?;
+                    _copy_dir_recursive(&src, &target)?;
                     remove_dir_all(&src)?;
                 } else {
                     if let Some(parent) = target.parent() {
                         create_dir_all(parent)?;
                     }
-                    fs::copy(&src, &target)?;
+                    copy(&src, &target)?;
                     let _ = remove_file(&src);
                 }
-            }
+            },
         }
     }
     Ok(())
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
+fn _copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
     create_dir_all(dst)?;
     for entry in WalkDir::new(src) {
         let entry = entry?;
@@ -336,41 +450,17 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
             if let Some(parent) = dest_path.parent() {
                 create_dir_all(parent)?;
             }
-            fs::copy(entry.path(), &dest_path)?;
+
+            copy(entry.path(), &dest_path)?;
         }
     }
+
     Ok(())
 }
 
-fn get_default_branch(owner: &str, repo: &str, token: Option<&str>) -> anyhow::Result<String> {
-    let client = Client::builder().user_agent("gitripper/0.1").build()?;
-    let url = format!("{}/repos/{}/{}", GITHUB_API, owner, repo);
-    let mut req = client.get(&url);
-    if let Some(t) = token {
-        req = req.header("Authorization", format!("token {}", t));
-    }
-    let res = req.timeout(Duration::from_secs(30)).send()?;
-    match res.status().as_u16() {
-        200 => {
-            let v: serde_json::Value = res.json()?;
-            Ok(v.get("default_branch")
-                .and_then(|b| b.as_str())
-                .unwrap_or("main")
-                .to_string())
-        }
-        404 => Err(anyhow!("Repository {}/{} not found (404).", owner, repo)),
-        s => {
-            let txt = res.text().unwrap_or_default();
-            Err(anyhow!("Failed to get repo info: {} {}", s, txt))
-        }
-    }
-}
-
 fn remove_embedded_git(dirpath: &Path) {
-    for entry in WalkDir::new(dirpath)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(Result::ok)
+    for entry in
+        WalkDir::new(dirpath).min_depth(1).into_iter().filter_map(Result::ok)
     {
         if entry.file_type().is_dir() && entry.file_name() == ".git" {
             let git_dir = entry.into_path();
@@ -406,7 +496,9 @@ fn initialize_repo(
     remote: Option<&str>,
 ) -> anyhow::Result<()> {
     let run_git = |args: &[&str]| -> anyhow::Result<()> {
-        let status = Command::new("git").args(args).current_dir(dest).status()?;
+        let status =
+            Command::new("git").args(args).current_dir(dest).status()?;
+
         if status.success() {
             Ok(())
         } else {
@@ -419,6 +511,7 @@ fn initialize_repo(
     if let Some(name) = author_name {
         run_git(&["config", "user.name", name])?;
     }
+
     if let Some(email) = author_email {
         run_git(&["config", "user.email", email])?;
     }
