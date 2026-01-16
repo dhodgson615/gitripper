@@ -1,10 +1,7 @@
 use std::{
     env::var,
-    fs::{
-        File, Permissions, copy, create_dir_all, hard_link, remove_dir_all,
-        remove_file, rename, set_permissions,
-    },
-    io::{self, BufReader, Cursor, Read, Write, stdin, stdout},
+    fs::{File, Permissions, create_dir_all, remove_dir_all, set_permissions},
+    io::{self, Cursor, Read, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
@@ -13,9 +10,7 @@ use std::{
 
 use WalkState::Continue;
 use anyhow::anyhow;
-use blake3::Hasher;
 use clap::Parser;
-use fs_extra::dir::{CopyOptions, copy as fs_extra_copy};
 use git2::{IndexAddOption, Repository, Signature};
 use ignore::{DirEntry, Error, WalkBuilder, WalkState};
 use memmap2::MmapOptions;
@@ -62,11 +57,6 @@ include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 #[cfg(feature = "zip")]
 fn zip_enabled() {
     println!("feature 'zip' is compiled in");
-}
-
-#[cfg(feature = "gix")]
-fn gix_enabled() {
-    println!("feature 'gix' is compiled in");
 }
 
 static MIME_BY_EXT: Map<&'static str, &'static str> = phf_map! {
@@ -508,99 +498,6 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
             }
         }
         Ok(())
-    })?;
-
-    Ok(())
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    create_dir_all(dst)?;
-
-    let mut options = CopyOptions::new();
-    options.copy_inside = true;
-    options.overwrite = true;
-    options.skip_exist = false;
-    fs_extra_copy(src, dst, &options).map(|_bytes| ()).map_err(|e| anyhow!(e))
-}
-
-fn compute_blake3_hex(path: &Path) -> anyhow::Result<String> {
-    let f = File::open(path)?;
-    let metadata = f.metadata()?;
-    if metadata.len() > 0 {
-        match unsafe { MmapOptions::new().map(&f) } {
-            Ok(mmap) => {
-                let mut hasher = Hasher::new();
-                hasher.update(&mmap[..]);
-                return Ok(hasher.finalize().to_hex().to_string());
-            },
-            Err(_) => {},
-        }
-    }
-
-    let mut reader = BufReader::with_capacity(8192, f);
-    let mut hasher = Hasher::new();
-    let mut buf = [0u8; 8192];
-
-    loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    Ok(hasher.finalize().to_hex().to_string())
-}
-
-fn move_items_to_dest(
-    items: Vec<PathBuf>,
-    dest_dir: &Path,
-) -> anyhow::Result<()> {
-    items.into_par_iter().try_for_each(|src| -> anyhow::Result<()> {
-        let name =
-            src.file_name().ok_or_else(|| anyhow!("Invalid source name"))?;
-
-        let target = dest_dir.join(name);
-
-        if target.exists() {
-            if target.is_dir() {
-                remove_dir_all(&target)?;
-            } else {
-                match (compute_blake3_hex(&src), compute_blake3_hex(&target)) {
-                    (Ok(src_hash), Ok(tgt_hash)) if src_hash == tgt_hash => {
-                        let _ = remove_file(&src);
-                        return Ok(());
-                    },
-                    _ => remove_file(&target)?,
-                }
-            }
-        }
-
-        match rename(&src, &target) {
-            Ok(_) => Ok(()),
-            Err(_) => {
-                if src.is_dir() {
-                    copy_dir_recursive(&src, &target)?;
-                    remove_dir_all(&src)?;
-                    Ok(())
-                } else {
-                    if let Some(parent) = target.parent() {
-                        create_dir_all(parent)?;
-                    }
-
-                    match hard_link(&src, &target) {
-                        Ok(_) => {
-                            let _ = remove_file(&src);
-                            Ok(())
-                        },
-                        Err(_) => {
-                            copy(&src, &target)?;
-                            let _ = remove_file(&src);
-                            Ok(())
-                        },
-                    }
-                }
-            },
-        }
     })?;
 
     Ok(())
