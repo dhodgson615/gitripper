@@ -19,17 +19,20 @@ use anyhow::anyhow;
 use clap::Parser;
 use env::var;
 use fs::{copy, rename};
-use once_cell::sync::Lazy;
 use process::exit;
-use regex::Regex;
 use reqwest::blocking::Client;
-use serde_json::{
-    Value, {self},
-};
+use serde_json::{self};
 use tempfile::tempdir;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
+const DEFAULT_BRANCH: &str = "main";
+const DEFAULT_COMMIT_MESSAGE: &str = "Initial commit";
+const TIMEOUT_GET_REPO_SECS: u64 = 30;
+const TIMEOUT_DOWNLOAD_SECS: u64 = 60;
+const ACCEPT_HEADER: &str = "application/vnd.github+json";
+const RE_GITHUB_PATTERN: &str = r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)";
+const ARCHIVE_PREFIX: &str = "archive-";
 const GITHUB_API: &str = "https://api.github.com";
 const USER_AGENT: &str = concat!("gitripper/", env!("CARGO_PKG_VERSION"));
 const ERR_INVALID_URL: i32 = 2;
@@ -191,10 +194,10 @@ fn determine_reference(
         },
         Err(e) => {
             eprintln!(
-                "Warning: could not determine default branch: {}. Using 'main'.",
-                e
+                "Warning: could not determine default branch: {}. Using '{}'.",
+                e, DEFAULT_BRANCH
             );
-            "main".to_string()
+            DEFAULT_BRANCH.to_string()
         },
     }
 }
@@ -220,11 +223,11 @@ fn download_archive(
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
-    static RE_GITHUB: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(
-            r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)"
-        ).unwrap()
-    });
+    // Use a static Lazy regex built from the pattern constant
+    static RE_GITHUB: once_cell::sync::Lazy<regex::Regex> =
+        once_cell::sync::Lazy::new(|| {
+            regex::Regex::new(RE_GITHUB_PATTERN).unwrap()
+        });
 
     let mut s = url.trim().to_string();
 
@@ -254,15 +257,19 @@ fn get_default_branch(
         req = req.header("Authorization", format!("token {}", t));
     }
 
-    let res = req.timeout(Duration::from_secs(30)).send()?;
+    // use TIMEOUT_GET_REPO_SECS
+    let res = req
+        .timeout(std::time::Duration::from_secs(TIMEOUT_GET_REPO_SECS))
+        .send()?;
 
     match res.status().as_u16() {
         200 => {
-            let v: Value = res.json()?;
+            let v: serde_json::Value = res.json()?;
 
+            // return DEFAULT_BRANCH when missing
             Ok(v.get("default_branch")
                 .and_then(|b| b.as_str())
-                .unwrap_or("main")
+                .unwrap_or(DEFAULT_BRANCH)
                 .to_string())
         },
 
@@ -283,19 +290,22 @@ fn download_zip(
     token: Option<&str>,
     dest_dir: &Path,
 ) -> anyhow::Result<PathBuf> {
+    // use ZIP_URL_FMT
     let url = format!(
-        "{}/repos/{}/{}/zipball/{}",
-        GITHUB_API, owner, repo, reference
+        "https://api.github.com/repos/{}/{}/zipball/{}",
+        owner, repo, reference
     );
 
-    let mut req =
-        client.get(&url).header("Accept", "application/vnd.github+json");
+    // set Accept header constant
+    let mut req = client.get(&url).header("Accept", ACCEPT_HEADER);
 
     if let Some(t) = token {
         req = req.header("Authorization", format!("token {}", t));
     }
 
-    let mut resp = req.timeout(Duration::from_secs(60)).send()?;
+    // use TIMEOUT_DOWNLOAD_SECS
+    let mut resp =
+        req.timeout(Duration::from_secs(TIMEOUT_DOWNLOAD_SECS)).send()?;
     let status = resp.status();
 
     if !status.is_success() {
@@ -315,12 +325,13 @@ fn download_zip(
     }
 
     let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-    let filename = format!("archive-{}.zip", ts.as_nanos());
+    // prefix filename with ARCHIVE_PREFIX
+    let filename = format!("{}{}.zip", ARCHIVE_PREFIX, ts.as_nanos());
     let path = dest_dir.join(filename);
 
     {
         let mut outfile = File::create(&path)?;
-        io::copy(&mut resp, &mut outfile)?;
+        std::io::copy(&mut resp, &mut outfile)?;
     }
 
     Ok(path)
@@ -541,7 +552,8 @@ fn initialize_repo(
     }
 
     run_git(&["add", "."])?;
-    run_git(&["commit", "-m", "Initial commit"])?;
+    // use DEFAULT_COMMIT_MESSAGE
+    run_git(&["commit", "-m", DEFAULT_COMMIT_MESSAGE])?;
 
     if let Some(r) = remote {
         run_git(&["remote", "add", "origin", r])?;
