@@ -31,6 +31,7 @@ use walkdir::WalkDir;
 use zip::ZipArchive;
 
 const GITHUB_API: &str = "https://api.github.com";
+const USER_AGENT: &str = concat!("gitripper/", env!("CARGO_PKG_VERSION"));
 const ERR_INVALID_URL: i32 = 2;
 const ERR_DEST_EXISTS: i32 = 3;
 const ERR_CLEANUP_FAILED: i32 = 4;
@@ -96,7 +97,7 @@ fn run() -> Result<(), i32> {
         determine_reference(&args, &client, &owner, &repo, token.as_deref());
 
     let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
-    
+
     let zip_path = download_archive(
         &client,
         &owner,
@@ -169,7 +170,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
 }
 
 fn get_client() -> Result<Client, ()> {
-    Client::builder().user_agent("gitripper/0.1").build().map_err(|_| ())
+    Client::builder().user_agent(USER_AGENT).build().map_err(|_| ())
 }
 
 fn determine_reference(
