@@ -1,26 +1,19 @@
 use std::{
-    env,
+    env::var,
     fs::{
-        File, Permissions, create_dir_all, remove_dir_all, remove_file,
-        set_permissions, {self},
+        File, Permissions, copy, create_dir_all, remove_dir_all, remove_file,
+        rename, set_permissions,
     },
-    io::{
-        Write, stdin, stdout, {self},
-    },
+    io::{self, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{
-        Command, Stdio, {self},
-    },
+    process::{Command, Stdio, exit},
     time::{Duration, SystemTime},
 };
 
 use anyhow::anyhow;
 use clap::Parser;
-use env::var;
-use fs::{copy, rename};
 use once_cell::sync::Lazy;
-use process::exit;
 use reqwest::blocking::Client;
 use serde_json::{self};
 use tempfile::tempdir;
