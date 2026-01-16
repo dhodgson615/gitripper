@@ -37,7 +37,7 @@ const ACCEPT_HEADER: &str = "application/vnd.github+json";
 const RE_GITHUB_PATTERN: &str = r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)";
 const ARCHIVE_PREFIX: &str = "archive-";
 const GITHUB_API: &str = "https://api.github.com";
-const USER_AGENT: &str = concat!("gitripper/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = BUILD_USER_AGENT;
 const ERR_INVALID_URL: i32 = 2;
 const ERR_DEST_EXISTS: i32 = 3;
 const ERR_CLEANUP_FAILED: i32 = 4;
@@ -46,31 +46,19 @@ const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
 
-// ================== compile-time additions ==================
-
-// 1) const concatenation for static URL pieces
-// const ZIP_API_PREFIX: &str = concat!(GITHUB_API, "/repos/");
-// replace concat! with a literal because concat! requires string literals
-const ZIP_API_PREFIX: &str = "https://api.github.com/repos/";
-
-// 2) const fn for a small pure computation and derived const
 const fn max_timeout_secs(a: u64, b: u64) -> u64 {
     if a > b { a } else { b }
 }
 const MAX_TIMEOUT_SECS: u64 =
     max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
 
-// 3) embed static file at compile time
 const DEFAULT_README: &str = include_str!("../assets/DEFAULT_README.md");
 
-// 4) compile-time env values from Cargo/build
 const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
 
-// 6) include generated file produced by build.rs (populates GIT_HASH)
 include!("./generated.rs");
 
-// 5) phf for a compile-time map (requires adding `phf = "0.10"` to Cargo.toml)
 static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rs" => "text/rust",
     "md" => "text/markdown",
@@ -86,6 +74,15 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
 
 fn get_client() -> &'static Client {
     &HTTP_CLIENT
+}
+
+fn touch_compile_items() {
+    let _ = max_timeout_secs(1u64, 2u64);
+    let _ = MAX_TIMEOUT_SECS;
+    let _ = DEFAULT_README;
+    let _ = BUILD_VERSION;
+    let _ = OPTIONAL_FLAG;
+    let _ = MIME_BY_EXT.get("md");
 }
 
 #[derive(Parser, Debug)]
@@ -126,6 +123,8 @@ fn main() {
 }
 
 fn run() -> Result<(), i32> {
+    touch_compile_items();
+
     let mut args = Args::parse();
     let token = args.token.take().or_else(|| var("GITHUB_TOKEN").ok());
     let url = read_url_from_args(&args)?;
@@ -589,35 +588,3 @@ fn initialize_repo(
     }
     Ok(())
 }
-
-/*
-// rust
-// 1) const concatenation for static URL pieces
-const ZIP_API_PREFIX: &str = concat!(GITHUB_API, "/repos/");
-
-// 2) const fn for a small pure computation
-const fn max_timeout_secs(a: u64, b: u64) -> u64 { if a > b { a } else { b } }
-const MAX_TIMEOUT_SECS: u64 = max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
-
-// 3) embed static file at compile time
-const DEFAULT_README: &str = include_str!("../assets/DEFAULT_README.md");
-
-// 4) compile-time env values from Cargo/build
-const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
-const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
-
-// 5) phf for a compile-time map (add `phf = "0.10"` to `Cargo.toml`)
-static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
-    "rs" => "text/rust",
-    "md" => "text/markdown",
-    "json" => "application/json",
-};
-
-// 6) simple `build.rs` pattern (create `build.rs`) to write `src/generated.rs`
-// build.rs (concept):
-// use std::{env, fs, process::Command};
-// let git = Command::new("git").args(&["rev-parse","--short","HEAD"]).output();
-// let hash = git.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-// fs::write("src/generated.rs", format!("pub const GIT_HASH: &str = \"{}\";\n", hash)).unwrap();
-// Then `include!("./generated.rs");` in code to get `GIT_HASH` at compile time.
- */
