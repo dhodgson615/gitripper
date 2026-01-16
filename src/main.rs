@@ -4,7 +4,7 @@ use std::{
         File, Permissions, copy, create_dir_all, remove_dir_all, remove_file,
         rename, set_permissions,
     },
-    io::{self, Read, Write, stdin, stdout},
+    io::{self, Cursor, Read, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
@@ -14,14 +14,14 @@ use std::{
 use anyhow::anyhow;
 use clap::Parser;
 use fs_extra::dir::{CopyOptions, copy as fs_extra_copy};
+use git2::{IndexAddOption, Repository, Signature};
+use ignore::{WalkBuilder, WalkState};
+use memmap2::MmapOptions;
 use once_cell::sync::Lazy;
-use rayon::iter::{
-    IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use reqwest::blocking::Client;
 use serde_json::{self};
 use tempfile::tempdir;
-use walkdir::WalkDir;
 use zip::ZipArchive;
 
 const DEFAULT_BRANCH: &str = "main";
@@ -377,8 +377,13 @@ fn download_zip(
 }
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
+    // Use memory-mapped file for faster random access during zip extraction.
+    // This avoids additional system copies when ZipArchive seeks around the
+    // file.
     let f = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(f)?;
+    let mmap = unsafe { MmapOptions::new().map(&f)? };
+    let cursor = Cursor::new(&mmap[..]);
+    let mut archive = ZipArchive::new(cursor)?;
     let len = archive.len();
 
     if len == 0 {
@@ -568,28 +573,42 @@ fn move_items_to_dest(
 }
 
 fn remove_embedded_git(dirpath: &Path) {
-    // collect .git directories first (to avoid mutating WalkDir while
-    // iterating), then remove them in parallel.
-    let git_dirs: Vec<PathBuf> = WalkDir::new(dirpath)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry.file_type().is_dir() && entry.file_name() == ".git"
-        })
-        .map(|entry| entry.into_path())
-        .collect();
+    // Use `ignore`'s parallel walker for faster traversal than WalkDir +
+    // collecting. WalkBuilder can run a callback in parallel threads and
+    // will visit entries efficiently; ensure we include hidden/git dirs by
+    // disabling standard filters.
+    let mut builder = WalkBuilder::new(dirpath);
+    builder.standard_filters(false).hidden(false);
 
-    git_dirs.par_iter().for_each(|git_dir| {
-        if let Err(e) = remove_dir_all(git_dir) {
-            eprintln!(
-                "Warning: failed to remove embedded .git at {}: {}",
-                git_dir.display(),
-                e
-            );
-        } else {
-            println!("Removed embedded .git at {}", git_dir.display());
-        }
+    builder.build_parallel().run(|| {
+        Box::new(|res: Result<ignore::DirEntry, ignore::Error>| {
+            match res {
+                Ok(entry) => {
+                    // Only interested in directories named ".git"
+                    if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                        && entry.file_name() == ".git"
+                    {
+                        let git_dir = entry.path().to_path_buf();
+                        match remove_dir_all(&git_dir) {
+                            Ok(_) => {
+                                println!("Removed embedded .git at {}", git_dir.display());
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "Warning: failed to remove embedded .git at {}: {}",
+                                    git_dir.display(),
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: walker error: {}", e);
+                }
+            }
+            WalkState::Continue
+        })
     });
 }
 
@@ -611,46 +630,59 @@ fn initialize_repo(
     author_email: Option<&str>,
     remote: Option<&str>,
 ) -> anyhow::Result<()> {
-    let run_git = |args: &[&str]| -> anyhow::Result<()> {
-        let status =
-            Command::new("git").args(args).current_dir(dest).status()?;
+    // Use git2 to initialize repo, configure user, stage and commit, and add
+    // remote. This avoids spawning the `git` binary and is typically faster
+    // and more robust.
+    let repo = Repository::init(dest)?;
 
-        if status.success() {
-            Ok(())
-        } else {
-            Err(anyhow!("git {:?} failed with status {}", args, status))
-        }
-    };
-
-    run_git(&["init"])?;
-
+    // Configure user.name/user.email if provided
     if let Some(name) = author_name {
-        run_git(&["config", "user.name", name])?;
+        let mut cfg = repo.config()?;
+        cfg.set_str("user.name", name)?;
     }
-
     if let Some(email) = author_email {
-        run_git(&["config", "user.email", email])?;
+        let mut cfg = repo.config()?;
+        cfg.set_str("user.email", email)?;
     }
 
-    run_git(&["add", "."])?;
-    run_git(&["commit", "-m", DEFAULT_COMMIT_MESSAGE])?;
+    // Stage all files
+    let mut index = repo.index()?;
+    // Add all files (recursive)
+    index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+    index.write()?;
+
+    let tree_id = index.write_tree()?;
+    let tree = repo.find_tree(tree_id)?;
+
+    // Signature for commit: prefer provided name/email, fall back to defaults.
+    let sig_name = author_name.unwrap_or("gitripper");
+    let sig_email = author_email.unwrap_or("gitripper@localhost");
+    let signature = Signature::now(sig_name, sig_email)?;
+
+    // Create initial commit with no parents
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        DEFAULT_COMMIT_MESSAGE,
+        &tree,
+        &[],
+    )?;
 
     if let Some(r) = remote {
-        run_git(&["remote", "add", "origin", r])?;
+        repo.remote("origin", r)?;
         println!("Set remote origin to {}", r);
     }
+
     Ok(())
 }
 
 /* TODO: Potential optimizations / alternative crates to consider
       gix — high‑performance, pure‑Rust git implementation (faster than spawning git or libgit2 for many tasks).
-      git2 — libgit2 bindings (good for shallow fetch/checkout instead of downloading ZIPs).
       tokio + reqwest (async) — overlap network + disk work and parallelize downloads/IO.
       isahc or curl — libcurl-based clients that can be faster and more featureful for many concurrent connections.
       hyper + hyper-tls — low-level, very fast HTTP client when you need max throughput/control.
       rayon — already used; continue for parallel CPU/disk work (file copies, extraction steps).
-      ignore — provides WalkParallel which can be faster than WalkDir + par_bridge.
-      memmap2 — memory‑map large files to speed copying or extraction where applicable.
       async-compression — for async decompression pipelines if you move to async extraction.
       blake3 — very fast hashing if you need content dedup/checksumming.
 */
