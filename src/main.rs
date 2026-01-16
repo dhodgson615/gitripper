@@ -146,6 +146,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
         .dest
         .clone()
         .unwrap_or_else(|| PathBuf::from(format!("{}-copy", repo)));
+
     if dest.exists() {
         let not_empty =
             dest.read_dir().map(|mut rd| rd.next().is_some()).unwrap_or(false);
@@ -163,77 +164,57 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
         }
     }
 
-    check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
+    Ok(dest)
+}
 
-    let client = Client::builder()
-        .user_agent("gitripper/0.1")
-        .build()
-        .map_err(|_| ERR_DOWNLOAD_FAILED)?;
+fn get_client() -> Result<Client, ()> {
+    Client::builder().user_agent("gitripper/0.1").build().map_err(|_| ())
+}
 
-    let mut reference = args.branch.clone();
-
-    if reference.is_none() {
-        match get_default_branch(&client, &owner, &repo, token.as_deref()) {
-            Ok(b) => {
-                reference = Some(b);
-                println!(
-                    "Using default branch '{}'",
-                    reference.as_ref().unwrap()
-                );
-            },
-
-            Err(e) => {
-                eprintln!(
-                    "Warning: could not determine default branch: {}. Using 'main'.",
-                    e
-                );
-                reference = Some("main".to_string());
-            },
-        }
+fn determine_reference(
+    args: &Args,
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    token: Option<&str>,
+) -> String {
+    if let Some(b) = args.branch.clone() {
+        return b;
     }
 
-    let reference = reference.unwrap();
-    let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
+    match get_default_branch(client, owner, repo, token) {
+        Ok(b) => {
+            println!("Using default branch '{}'", b);
+            b
+        },
+        Err(e) => {
+            eprintln!(
+                "Warning: could not determine default branch: {}. Using 'main'.",
+                e
+            );
+            "main".to_string()
+        },
+    }
+}
 
-    let zip_path = match download_zip(
-        &client,
-        &owner,
-        &repo,
-        &reference,
-        token.as_deref(),
-        tmp.path(),
-    ) {
+fn download_archive(
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    reference: &str,
+    token: Option<&str>,
+    dest_dir: &Path,
+) -> Result<PathBuf, i32> {
+    match download_zip(client, owner, repo, reference, token, dest_dir) {
         Ok(p) => {
             println!("Downloaded archive to {}", p.display());
-            p
+            Ok(p)
         },
         Err(e) => {
             eprintln!("Failed to download repository archive: {}", e);
-            return Err(ERR_DOWNLOAD_FAILED);
+            Err(ERR_DOWNLOAD_FAILED)
         },
-    };
-
-    if let Err(e) = extract_zip(&zip_path, &dest) {
-        eprintln!("Failed to extract archive: {}", e);
-        return Err(ERR_EXTRACTION_FAILED);
     }
-
-    remove_embedded_git(&dest);
-    println!("Initializing new git repository...");
-
-    if let Err(e) = initialize_repo(
-        &dest,
-        args.author_name.as_deref(),
-        args.author_email.as_deref(),
-        args.remote.as_deref(),
-    ) {
-        eprintln!("Failed to initialize repository: {}", e);
-        return Err(ERR_INIT_FAILED);
-    }
-
-    println!("Done. Repository copied to: {}", dest.display());
-    println!("Note: this repository has no history from the original repo.");
-    Ok(())
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
