@@ -46,6 +46,37 @@ const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
 
+// ================== compile-time additions ==================
+
+// 1) const concatenation for static URL pieces
+// const ZIP_API_PREFIX: &str = concat!(GITHUB_API, "/repos/");
+// replace concat! with a literal because concat! requires string literals
+const ZIP_API_PREFIX: &str = "https://api.github.com/repos/";
+
+// 2) const fn for a small pure computation and derived const
+const fn max_timeout_secs(a: u64, b: u64) -> u64 {
+    if a > b { a } else { b }
+}
+const MAX_TIMEOUT_SECS: u64 =
+    max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
+
+// 3) embed static file at compile time
+const DEFAULT_README: &str = include_str!("../assets/DEFAULT_README.md");
+
+// 4) compile-time env values from Cargo/build
+const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
+const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
+
+// 6) include generated file produced by build.rs (populates GIT_HASH)
+include!("./generated.rs");
+
+// 5) phf for a compile-time map (requires adding `phf = "0.10"` to Cargo.toml)
+static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
+    "rs" => "text/rust",
+    "md" => "text/markdown",
+    "json" => "application/json",
+};
+
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     Client::builder()
         .user_agent(USER_AGENT)
@@ -556,6 +587,37 @@ fn initialize_repo(
         run_git(&["remote", "add", "origin", r])?;
         println!("Set remote origin to {}", r);
     }
-
     Ok(())
 }
+
+/*
+// rust
+// 1) const concatenation for static URL pieces
+const ZIP_API_PREFIX: &str = concat!(GITHUB_API, "/repos/");
+
+// 2) const fn for a small pure computation
+const fn max_timeout_secs(a: u64, b: u64) -> u64 { if a > b { a } else { b } }
+const MAX_TIMEOUT_SECS: u64 = max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
+
+// 3) embed static file at compile time
+const DEFAULT_README: &str = include_str!("../assets/DEFAULT_README.md");
+
+// 4) compile-time env values from Cargo/build
+const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
+const OPTIONAL_FLAG: Option<&'static str> = option_env!("MY_BUILD_FLAG");
+
+// 5) phf for a compile-time map (add `phf = "0.10"` to `Cargo.toml`)
+static MIME_BY_EXT: phf::Map<&'static str, &'static str> = phf::phf_map! {
+    "rs" => "text/rust",
+    "md" => "text/markdown",
+    "json" => "application/json",
+};
+
+// 6) simple `build.rs` pattern (create `build.rs`) to write `src/generated.rs`
+// build.rs (concept):
+// use std::{env, fs, process::Command};
+// let git = Command::new("git").args(&["rev-parse","--short","HEAD"]).output();
+// let hash = git.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+// fs::write("src/generated.rs", format!("pub const GIT_HASH: &str = \"{}\";\n", hash)).unwrap();
+// Then `include!("./generated.rs");` in code to get `GIT_HASH` at compile time.
+ */
