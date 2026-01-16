@@ -87,6 +87,61 @@ fn run() -> Result<(), i32> {
         return Err(ERR_INVALID_URL);
     }
 
+    let dest = prepare_destination(&args, &repo)?;
+    check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
+
+    let client = get_client().map_err(|_| ERR_DOWNLOAD_FAILED)?;
+
+    let reference =
+        determine_reference(&args, &client, &owner, &repo, token.as_deref());
+
+    let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
+    let zip_path = download_archive(
+        &client,
+        &owner,
+        &repo,
+        &reference,
+        token.as_deref(),
+        tmp.path(),
+    )?;
+
+    extract_zip(&zip_path, &dest).map_err(|e| {
+        eprintln!("Failed to extract archive: {}", e);
+        ERR_EXTRACTION_FAILED
+    })?;
+
+    remove_embedded_git(&dest);
+    println!("Initializing new git repository...");
+
+    initialize_repo(
+        &dest,
+        args.author_name.as_deref(),
+        args.author_email.as_deref(),
+        args.remote.as_deref(),
+    )
+    .map_err(|e| {
+        eprintln!("Failed to initialize repository: {}", e);
+        ERR_INIT_FAILED
+    })?;
+
+    println!("Done. Repository copied to: {}", dest.display());
+    println!("Note: this repository has no history from the original repo.");
+    Ok(())
+}
+
+fn read_url_from_args(args: &Args) -> Result<String, i32> {
+    if let Some(u) = args.url.clone() {
+        Ok(u)
+    } else {
+        print!("Enter repository URL: ");
+        stdout().flush().ok();
+        let mut input = String::new();
+        stdin().read_line(&mut input).map_err(|_| ERR_INVALID_URL)?;
+        Ok(input.trim().to_string())
+    }
+}
+
+fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
     let dest = args
         .dest
         .clone()
