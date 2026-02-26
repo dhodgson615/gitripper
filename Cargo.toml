@@ -29,6 +29,19 @@ panic = "abort"
 opt-level = 0
 codegen-units = 16
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.23.0"
+
 [features]
 zip = ["dep:zip"]
 default = ["zip"]
+
+[[bench]]
+name = "url_parsing"
+harness = false
+
+[[bench]]
+name = "zip_extraction"
+harness = false
+
