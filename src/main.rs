@@ -1,23 +1,23 @@
 use std::{
     env::var,
-    fs::{File, remove_dir_all},
-    io::{self, Write, stdin, stdout},
+    fs::{remove_dir_all, File},
+    io::{self, stdin, stdout, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio, exit},
+    process::{exit, Command, Stdio},
     time::{Duration, SystemTime},
 };
 
-use WalkState::Continue;
 use anyhow::anyhow;
 use clap::Parser;
 use git2::{IndexAddOption, Repository, Signature};
 use gitripper::{extract_zip, parse_github_url};
 use ignore::{DirEntry, Error, WalkBuilder, WalkState};
 use once_cell::sync::Lazy;
-use phf::{Map, phf_map};
+use phf::{phf_map, Map};
 use reqwest::blocking::Client;
 use serde_json::Value;
 use tempfile::tempdir;
+use WalkState::Continue;
 
 const DEFAULT_BRANCH: &str = "main";
 const DEFAULT_COMMIT_MESSAGE: &str = "Initial commit";
@@ -37,7 +37,13 @@ const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
 
-const fn max_timeout_secs(a: u64, b: u64) -> u64 { if a > b { a } else { b } }
+const fn max_timeout_secs(a: u64, b: u64) -> u64 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
 const MAX_TIMEOUT_SECS: u64 =
     max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
 
@@ -433,10 +439,10 @@ fn initialize_repo(
 }
 
 /* TODO: Potential optimizations / alternative crates to consider
-         - tokio + reqwest (async) — overlap network + disk work and
-           parallelize downloads/IO.
-         - isahc or curl — libcurl-based clients that can be faster and more
-           featureful for many concurrent connections.
-         - async-compression — for async decompression pipelines if you move to
-           async extraction.
- */
+        - tokio + reqwest (async) — overlap network + disk work and
+          parallelize downloads/IO.
+        - isahc or curl — libcurl-based clients that can be faster and more
+          featureful for many concurrent connections.
+        - async-compression — for async decompression pipelines if you move to
+          async extraction.
+*/
