@@ -443,7 +443,10 @@ fn initialize_repo(
 }
 
 /* TODO: Potential optimizations / alternative crates to consider
-      tokio + reqwest (async) — overlap network + disk work and parallelize downloads/IO.
-      isahc or curl — libcurl-based clients that can be faster and more featureful for many concurrent connections.
-      async-compression — for async decompression pipelines if you move to async extraction.
-*/
+         - tokio + reqwest (async) — overlap network + disk work and
+           parallelize downloads/IO.
+         - isahc or curl — libcurl-based clients that can be faster and more
+           featureful for many concurrent connections.
+         - async-compression — for async decompression pipelines if you move to
+           async extraction.
+ */
