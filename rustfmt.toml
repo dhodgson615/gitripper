@@ -1,52 +1,107 @@
 # Core
-edition = "2024"                          # Rust edition to use
-max_width = 80                            # maximum line width
-newline_style = "Unix"                    # "Unix" (LF) or "Windows" (CRLF)
+edition          = "2024"                     # Rust edition to use
+max_width        = 80                         # maximum line width
+newline_style    = "Unix"                     # "Unix" (LF) or "Windows" (CRLF)
+style_edition    = "2015"                     # edition to use for formatting style (e.g., for import granularity)
+version          = "One"                      # "One" (stable Rust), "Two" (unstable features), or a specific rustfmt version (e.g., "1.8.0")
+required_version = "1.8.0"                    # minimum rustfmt version required to format the code
 
 # Indentation
-hard_tabs = false                         # use spaces instead of tabs
-tab_spaces = 4                            # number of spaces per tab
+hard_tabs    = false                          # use spaces instead of tabs
+tab_spaces   = 4                              # number of spaces per tab
+indent_style = "Block"                        # "Block" (indent blocks), "Visual" (align with opening delimiter), "Mixed" (block for items, visual for expressions)
 
 # Imports
-reorder_imports = true                    # reorder imports alphabetically
-imports_granularity = "Crate"             # "Crate", "Module", "Item"
-group_imports = "StdExternalCrate"        # groups std, external, and crate imports
+reorder_imports     = true                    # reorder imports alphabetically
+imports_granularity = "Crate"                 # "Crate", "Module", "Item"
+group_imports       = "StdExternalCrate"      # groups std, external, and crate imports
+imports_indent      = "Block"                 # "Block" (indent imports), "Visual" (align with first import), "Mixed" (block for groups, visual within groups)
+imports_layout      = "Mixed"                 # "Horizontal" (all imports on one line), "Vertical" (one import per line), "Mixed" (horizontal if fits, vertical otherwise)
+reorder_modules     = true                    # reorder module declarations
+reorder_impl_items  = false                   # reorder items within impl blocks
 
 # Comments / docs
-wrap_comments = true                      # wrap long comments to max_width
-format_code_in_doc_comments = true        # format code blocks in doc comments
-normalize_doc_attributes = true           # normalize doc attributes (e.g., /// to /** */)
+wrap_comments                = true           # wrap long comments to max_width
+format_code_in_doc_comments  = true           # format code blocks in doc comments
+normalize_doc_attributes     = true           # normalize doc attributes (e.g., /// to /** */)
+comment_width                = 80             # max width for comments
+normalize_comments           = false          # normalize comment prefixes
+doc_comment_code_block_width = 100            # max width for code blocks in doc comments
 
 # Commas, derives, general layout
-trailing_comma = "Vertical"               # "Always", "Never", "Vertical"
-merge_derives = true                      # merge multiple derive attributes into one
+trailing_comma     = "Vertical"               # "Always", "Never", "Vertical"
+merge_derives      = true                     # merge multiple derive attributes into one
+trailing_semicolon = true                     # add semicolon after expressions in statement position (e.g., `let x = 5` -> `let x = 5;`)
 
 # Control flow / heuristics
-control_brace_style = "AlwaysSameLine"    # "AlwaysSameLine", "ClosingNextLine", "AlwaysNextLine"
-use_small_heuristics = "Off"              # "Max", "Off", "Default"
-fn_single_line = true
+control_brace_style    = "AlwaysSameLine"     # "AlwaysSameLine", "ClosingNextLine", "AlwaysNextLine"
+use_small_heuristics   = "Off"                # "Max", "Off", "Default"
+fn_single_line         = true                 # allow single-line function definitions if they fit within max_width
+brace_style            = "AlwaysSameLine"     # "SameLineWhere" (put opening brace on same line as where clause), "AlwaysSameLine" (always put opening brace on same line), "AlwaysNextLine" (always put opening brace on next line)
+combine_control_expr   = true                 # combine control flow expressions (e.g., `if let` + `else if let` -> `if let ... else if let ...`)
+force_multiline_blocks = false                # force blocks to be multiline even if they fit on one line
 
 # Alignment and spacing
-struct_field_align_threshold = 20         # align struct fields if <= this number of fields
-array_width = 80                          # max width for single-line arrays
+struct_field_align_threshold = 20             # align struct fields if <= this number of fields
+array_width                  = 80             # max width for single-line arrays
+fn_call_width                = 60             # max width for single-line function calls
+attr_fn_like_width           = 70             # max width for single-line function-like attributes
+struct_lit_width             = 18             # max width for single-line struct literals
+struct_variant_width         = 35             # max width for single-line struct variants
+enum_discrim_align_threshold = 0              # align enum discriminants if <= this number of variants
+type_punctuation_density     = "Wide"         # "Wide" (more spaces around punctuation), "Compact" (fewer spaces), "Preserve" (keep existing spacing)
+space_before_colon           = false          # space before `:` in type annotations
+space_after_colon            = true           # space after `:` in type annotations
+spaces_around_ranges         = false          # spaces around `..` and `...`
+inline_attribute_width       = 0              # max width for inline attributes (0 to disable)
 
 # Chains / matches
-chain_width = 80                          # max width for single-line method chains
-match_arm_blocks = true                   # put match arms with blocks on their own lines
-match_block_trailing_comma = true         # add trailing comma to match blocks
+chain_width                = 80               # max width for single-line method chains
+match_arm_blocks           = true             # put match arms with blocks on their own lines
+match_block_trailing_comma = true             # add trailing comma to match blocks
+match_arm_leading_pipes    = "Never"          # "Never", "Always", "Preserve"
+
+# Single line options
+single_line_if_else_max_width  = 80           # max width for single-line if-else expressions
+single_line_let_else_max_width = 50           # max width for single-line let-else expressions
+where_single_line              = false        # put where clause on single line if possible
+empty_item_single_line         = true         # allow empty items (e.g., empty functions, empty impl blocks) to be formatted on a single line
+struct_lit_single_line         = true         # allow struct literals to be formatted on a single line if they fit
 
 # Misc
-blank_lines_upper_bound = 1               # max blank lines between items
-fn_params_layout = "Tall"                 # "Compressed", "Tall", "MultiLine"
-format_strings = true                     # format string literals
-remove_nested_parens = true               # remove unnecessary nested parentheses
-reorder_modules = true                    # reorder module declarations
-space_before_colon = false                # space before `:` in type annotations
-space_after_colon = true                  # space after `:` in type annotations
-spaces_around_ranges = false              # spaces around `..` and `...`
-match_arm_leading_pipes = "Never"         # "Never", "Always", "Preserve"
-where_single_line = false                 # put where clause on single line if possible
-comment_width = 80                        # max width for comments
-normalize_comments = false                # normalize comment prefixes
-force_explicit_abi = true                 # force explicit ABI in FFI functions
-single_line_if_else_max_width = 80        # max width for single-line if-else expressions
+blank_lines_upper_bound             = 1       # max blank lines between items
+blank_lines_lower_bound             = 0       # min blank lines between items
+fn_params_layout                    = "Tall"  # "Compressed", "Tall", "MultiLine"
+format_strings                      = true    # format string literals
+remove_nested_parens                = true    # remove unnecessary nested parentheses
+force_explicit_abi                  = true    # force explicit ABI in FFI functions
+binop_separator                     = "Front" # "Front" (put operator at front of line), "Back" (put operator at back of line)
+short_array_element_width_threshold = 10      # max width for array elements to allow short formatting (e.g., `[1, 2, 3]` instead of `[\n    1,\n    2,\n    3,\n]`)
+overflow_delimited_expr             = false   # allow delimited expressions (e.g., arrays, tuples) to overflow if they don't fit on one line
+use_try_shorthand                   = true    # use `?` operator instead of `try!` macro
+use_field_init_shorthand            = false   # use field init shorthand (e.g., `x` instead of `x: x`) when possible
+condense_wildcard_suffixes          = false   # condense wildcard suffixes in patterns (e.g., `..` instead of `.._`)
+
+# Macros
+format_macro_matchers  = false                # format macro matchers (e.g., `macro_rules!` patterns)
+format_macro_bodies    = true                 # format macro bodies (e.g., `macro_rules!` expansions)
+skip_macro_invocations = []                   # list of macro invocations to skip formatting (e.g., `["my_macro!"]`)
+
+# Literals
+hex_literal_case = "Lower"                    # "Upper" (e.g., `0xDEADBEEF`), "Lower" (e.g., `0xdeadbeef`), "Preserve" (keep existing case)
+
+# Generated files
+format_generated_files             = true     # format files generated by build scripts (e.g., `build.rs`)
+generated_marker_line_search_limit = 10       # number of lines to search for generated file marker (e.g., `// @generated`)
+
+# Error handling / output
+color                  = "Auto"               # "Auto" (color if output is a terminal), "Always" (always use color), "Never" (never use color)
+unstable_features      = false                # allow use of unstable features (requires nightly Rust)
+disable_all_formatting = false                # disable all formatting and just check for parse errors
+skip_children          = false                # skip formatting of child nodes if parent node has parse errors
+show_parse_errors      = true                 # show parse errors encountered during formatting
+error_on_line_overflow = false                # return an error if any lines exceed max_width
+error_on_unformatted   = false                # return an error if any code was not formatted (e.g., due to parse errors or skipped macros)
+ignore                 = []                   # list of files or directories to ignore (e.g., `["src/ignore_this.rs", "tests/"]`)
+emit_mode              = "Files"              # "Files" (write formatted code to files), "Stdout" (write formatted code to stdout), "Check" (check if code is formatted, return error if not)
+make_backup            = false                # create backup files with `.bak` extension before overwriting original files
