@@ -1,8 +1,7 @@
 use std::{
     env::var,
-    fs::{File, Permissions, create_dir_all, remove_dir_all, set_permissions},
-    io::{self, Cursor, Write, stdin, stdout},
-    os::unix::fs::PermissionsExt,
+    fs::{File, remove_dir_all},
+    io::{self, Write, stdin, stdout},
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
     time::{Duration, SystemTime},
@@ -12,16 +11,13 @@ use WalkState::Continue;
 use anyhow::anyhow;
 use clap::Parser;
 use git2::{IndexAddOption, Repository, Signature};
+use gitripper::{extract_zip, parse_github_url};
 use ignore::{DirEntry, Error, WalkBuilder, WalkState};
-use memmap2::MmapOptions;
 use once_cell::sync::Lazy;
 use phf::{Map, phf_map};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use regex::Regex;
 use reqwest::blocking::Client;
 use serde_json::Value;
 use tempfile::tempdir;
-use zip::ZipArchive;
 
 const DEFAULT_BRANCH: &str = "main";
 const DEFAULT_COMMIT_MESSAGE: &str = "Initial commit";
@@ -30,7 +26,6 @@ const TIMEOUT_DOWNLOAD_SECS: u64 = 60;
 const TIMEOUT_GET_REPO: Duration = Duration::from_secs(TIMEOUT_GET_REPO_SECS);
 const TIMEOUT_DOWNLOAD: Duration = Duration::from_secs(TIMEOUT_DOWNLOAD_SECS);
 const ACCEPT_HEADER: &str = "application/vnd.github+json";
-const RE_GITHUB_PATTERN: &str = r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)";
 const ARCHIVE_PREFIX: &str = "archive-";
 const GITHUB_API: &str = "https://api.github.com";
 const USER_AGENT: &str = BUILD_USER_AGENT;
@@ -41,7 +36,6 @@ const ERR_GIT_NOT_FOUND: i32 = 5;
 const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
-const PARALLEL_THRESHOLD_BYTES: u64 = 10_485_760; // 10 MB
 
 const fn max_timeout_secs(a: u64, b: u64) -> u64 {
     if a > b { a } else { b }
@@ -271,22 +265,6 @@ fn download_archive(
     }
 }
 
-fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
-    static RE_GITHUB: Lazy<Regex> =
-        Lazy::new(|| Regex::new(RE_GITHUB_PATTERN).unwrap());
-
-    let trimmed = url.trim();
-    let stripped = trimmed.strip_suffix(".git").unwrap_or(trimmed);
-
-    if let Some(caps) = RE_GITHUB.captures(stripped) {
-        let owner = caps.get(1).unwrap().as_str().to_string();
-        let repo = caps.get(2).unwrap().as_str().to_string();
-        Ok((owner, repo))
-    } else {
-        Err("Invalid GitHub URL")
-    }
-}
-
 fn get_default_branch(
     client: &Client,
     owner: &str,
@@ -368,141 +346,6 @@ fn download_zip(
     }
 
     Ok(path)
-}
-
-#[derive(Debug)]
-struct MemEntry {
-    rel_path:   PathBuf,
-    is_dir:     bool,
-    _data_size: u64,
-    unix_mode:  Option<u32>,
-    _file_idx:  usize,
-    data:       Vec<u8>,
-}
-
-fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
-    let f = File::open(zip_path)?;
-    let mmap = unsafe { MmapOptions::new().map(&f)? };
-    let cursor = Cursor::new(&mmap[..]);
-    let mut archive = ZipArchive::new(cursor)?;
-    let len = archive.len();
-
-    if len == 0 {
-        return Err(anyhow!("Zip archive is empty."));
-    }
-
-    create_dir_all(dest_dir)?;
-
-    let mut entries: Vec<MemEntry> = Vec::with_capacity(len);
-    let mut root_prefix: Option<PathBuf> = None;
-    let mut root_mismatch = false;
-    let mut total_size: u64 = 0;
-
-    // Single pass: detect root prefix, collect entries, and read file data
-    for i in 0..len {
-        let mut file = archive.by_index(i)?;
-        let in_path = file
-            .enclosed_name()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from(file.name()));
-
-        // Root prefix detection with early short-circuit
-        if !root_mismatch {
-            if let Some(first) = in_path.components().next() {
-                let first_str = first.as_os_str().to_string_lossy();
-                if first_str.is_empty() {
-                    root_mismatch = true;
-                } else if let Some(ref current_prefix) = root_prefix {
-                    if current_prefix.as_os_str() != first.as_os_str() {
-                        root_mismatch = true;
-                    }
-                } else {
-                    root_prefix = Some(PathBuf::from(first.as_os_str()));
-                }
-            } else {
-                root_mismatch = true;
-            }
-        }
-
-        let rel_path = if !root_mismatch {
-            if let Some(ref root) = root_prefix {
-                match in_path.strip_prefix(root) {
-                    Ok(p) => p.to_path_buf(),
-                    Err(_) => {
-                        root_mismatch = true;
-                        in_path.clone()
-                    },
-                }
-            } else {
-                in_path.clone()
-            }
-        } else {
-            in_path.clone()
-        };
-
-        if rel_path.as_os_str().is_empty() {
-            continue;
-        }
-
-        let is_dir = file.name().ends_with('/');
-        let unix_mode = file.unix_mode();
-
-        // Read file data in single by_index call
-        let (data_size, data) = if is_dir {
-            (0, Vec::new())
-        } else {
-            let size = file.size();
-            let mut buf = Vec::with_capacity(size as usize);
-            io::copy(&mut file, &mut buf)?;
-            (size, buf)
-        };
-
-        total_size += data_size;
-
-        entries.push(MemEntry {
-            rel_path,
-            is_dir,
-            _data_size: data_size,
-            unix_mode,
-            _file_idx: i,
-            data,
-        });
-    }
-
-    // Gate parallelism on total size
-    if total_size > PARALLEL_THRESHOLD_BYTES {
-        entries.into_par_iter().try_for_each(
-            |entry| -> anyhow::Result<()> { write_entry(&entry, dest_dir) },
-        )?;
-    } else {
-        for entry in entries {
-            write_entry(&entry, dest_dir)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn write_entry(entry: &MemEntry, dest_dir: &Path) -> anyhow::Result<()> {
-    let outpath = dest_dir.join(&entry.rel_path);
-
-    if entry.is_dir {
-        create_dir_all(&outpath)?;
-    } else {
-        if let Some(parent) = outpath.parent() {
-            create_dir_all(parent)?;
-        }
-        let mut outfile = File::create(&outpath)?;
-        outfile.write_all(&entry.data)?;
-
-        #[cfg(unix)]
-        {
-            if let Some(mode) = entry.unix_mode {
-                let _ = set_permissions(&outpath, Permissions::from_mode(mode));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn remove_embedded_git(dirpath: &Path) {
