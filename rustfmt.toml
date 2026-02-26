@@ -3,7 +3,6 @@ edition          = "2024"                     # Rust edition to use
 max_width        = 80                         # maximum line width
 newline_style    = "Unix"                     # "Unix" (LF) or "Windows" (CRLF)
 style_edition    = "2015"                     # edition to use for formatting style (e.g., for import granularity)
-version          = "One"                      # "One" (stable Rust), "Two" (unstable features), or a specific rustfmt version (e.g., "1.8.0")
 required_version = "1.8.0"                    # minimum rustfmt version required to format the code
 
 # Indentation
@@ -37,7 +36,7 @@ trailing_semicolon = true                     # add semicolon after expressions 
 control_brace_style    = "AlwaysSameLine"     # "AlwaysSameLine", "ClosingNextLine", "AlwaysNextLine"
 use_small_heuristics   = "Off"                # "Max", "Off", "Default"
 fn_single_line         = true                 # allow single-line function definitions if they fit within max_width
-brace_style            = "AlwaysSameLine"     # "SameLineWhere" (put opening brace on same line as where clause), "AlwaysSameLine" (always put opening brace on same line), "AlwaysNextLine" (always put opening brace on next line)
+brace_style            = "PreferSameLine"     # "SameLineWhere" (put where clause on same line as function signature if it fits), "PreferSameLine" (prefer same line for where clause but allow next line if it doesn't fit), "AlwaysNextLine" (always put where clause on next line)
 combine_control_expr   = true                 # combine control flow expressions (e.g., `if let` + `else if let` -> `if let ... else if let ...`)
 force_multiline_blocks = false                # force blocks to be multiline even if they fit on one line
 
