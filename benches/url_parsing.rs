@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use gitripper::parse_github_url;
 
 fn benchmark_parse_https_url(c: &mut Criterion) {
