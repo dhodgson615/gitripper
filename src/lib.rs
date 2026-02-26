@@ -1,5 +1,5 @@
 use std::{
-    fs::{File, Permissions, create_dir_all, set_permissions},
+    fs::{create_dir_all, read_to_string, set_permissions, File, Permissions},
     io::{self, Cursor, Write},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
@@ -8,13 +8,13 @@ use std::{
 use anyhow::anyhow;
 use memmap2::MmapOptions;
 use once_cell::sync::Lazy;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use regex::Regex;
 use zip::ZipArchive;
 
 const RE_GITHUB_PATTERN: &str = r"(?xi)^(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?(?:/|$)";
 const PARALLEL_THRESHOLD_BYTES: u64 = 10_485_760; // 10 MB
 
-/// Represents an entry in the ZIP archive before extraction
 #[derive(Debug)]
 pub struct MemEntry {
     pub rel_path:   PathBuf,
@@ -25,7 +25,6 @@ pub struct MemEntry {
     pub data:       Vec<u8>,
 }
 
-/// Parse a GitHub URL to extract owner and repository name
 pub fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
     static RE_GITHUB: Lazy<Regex> =
         Lazy::new(|| Regex::new(RE_GITHUB_PATTERN).unwrap());
@@ -42,7 +41,6 @@ pub fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
     }
 }
 
-/// Write a single entry (file or directory) to disk
 pub fn write_entry(entry: &MemEntry, dest_dir: &Path) -> anyhow::Result<()> {
     let outpath = dest_dir.join(&entry.rel_path);
 
@@ -56,16 +54,13 @@ pub fn write_entry(entry: &MemEntry, dest_dir: &Path) -> anyhow::Result<()> {
         outfile.write_all(&entry.data)?;
 
         #[cfg(unix)]
-        {
-            if let Some(mode) = entry.unix_mode {
-                let _ = set_permissions(&outpath, Permissions::from_mode(mode));
-            }
+        if let Some(mode) = entry.unix_mode {
+            let _ = set_permissions(&outpath, Permissions::from_mode(mode));
         }
     }
     Ok(())
 }
 
-/// Extract a ZIP archive to the destination directory
 pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
     let f = File::open(zip_path)?;
     let mmap = unsafe { MmapOptions::new().map(&f)? };
@@ -84,15 +79,14 @@ pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
     let mut root_mismatch = false;
     let mut total_size: u64 = 0;
 
-    // Single pass: detect root prefix, collect entries, and read file data
     for i in 0..len {
         let mut file = archive.by_index(i)?;
+
         let in_path = file
             .enclosed_name()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from(file.name()));
 
-        // Root prefix detection with early short-circuit
         if !root_mismatch {
             if let Some(first) = in_path.components().next() {
                 let first_str = first.as_os_str().to_string_lossy();
@@ -133,7 +127,6 @@ pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         let is_dir = file.name().ends_with('/');
         let unix_mode = file.unix_mode();
 
-        // Read file data in single by_index call
         let (data_size, data) = if is_dir {
             (0, Vec::new())
         } else {
@@ -155,9 +148,7 @@ pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         });
     }
 
-    // Gate parallelism on total size
     if total_size > PARALLEL_THRESHOLD_BYTES {
-        use rayon::iter::{IntoParallelIterator, ParallelIterator};
         entries.into_par_iter().try_for_each(
             |entry| -> anyhow::Result<()> { write_entry(&entry, dest_dir) },
         )?;
@@ -268,7 +259,7 @@ mod tests {
 
         let file_path = dest.join("test.txt");
         assert!(file_path.exists());
-        let content = std::fs::read_to_string(&file_path).unwrap();
+        let content = read_to_string(&file_path).unwrap();
         assert_eq!(content, "hello world");
     }
 
@@ -290,7 +281,7 @@ mod tests {
 
         let file_path = dest.join("nested/dir/test.txt");
         assert!(file_path.exists());
-        let content = std::fs::read_to_string(&file_path).unwrap();
+        let content = read_to_string(&file_path).unwrap();
         assert_eq!(content, "hello");
     }
 
