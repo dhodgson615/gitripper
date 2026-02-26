@@ -6,7 +6,11 @@ fn integration_parse_various_github_urls() {
         ("https://github.com/torvalds/linux", "torvalds", "linux"),
         ("https://github.com/rust-lang/rust.git", "rust-lang", "rust"),
         ("git@github.com:golang/go", "golang", "go"),
-        ("ssh://git@github.com/python/cpython.git", "python", "cpython"),
+        (
+            "ssh://git@github.com/python/cpython.git",
+            "python",
+            "cpython",
+        ),
     ];
 
     for (url, expected_owner, expected_repo) in test_cases {
