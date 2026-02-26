@@ -24,8 +24,10 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
-debug = "none"
-overflow-checks = false
+
+[profile.release.build-override]
+opt-level = 0
+codegen-units = 16
 
 [features]
 zip = ["dep:zip"]
