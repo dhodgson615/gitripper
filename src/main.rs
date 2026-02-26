@@ -37,9 +37,7 @@ const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
 
-const fn max_timeout_secs(a: u64, b: u64) -> u64 {
-    if a > b { a } else { b }
-}
+const fn max_timeout_secs(a: u64, b: u64) -> u64 { if a > b { a } else { b } }
 const MAX_TIMEOUT_SECS: u64 =
     max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
 
@@ -67,9 +65,7 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
         .expect("failed to build global HTTP client")
 });
 
-fn get_client() -> &'static Client {
-    &HTTP_CLIENT
-}
+fn get_client() -> &'static Client { &HTTP_CLIENT }
 
 fn touch_compile_items() {
     let _ = max_timeout_secs(1u64, 2u64);
@@ -92,7 +88,8 @@ fn touch_compile_items() {
 #[command(
     author,
     version,
-    about = "Download a GitHub repository's contents and create a local git repo."
+    about = "Download a GitHub repository's contents and create a local git \
+             repo."
 )]
 struct Args {
     url: Option<String>,
@@ -205,7 +202,8 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
 
         if not_empty && !args.force {
             eprintln!(
-                "Destination '{}' exists and is not empty. Use --force to overwrite.",
+                "Destination '{}' exists and is not empty. Use --force to \
+                 overwrite.",
                 dest.display()
             );
             return Err(ERR_DEST_EXISTS);
@@ -283,13 +281,11 @@ fn get_default_branch(
     match res.status().as_u16() {
         200 => {
             let v: Value = res.json()?;
-
             Ok(v.get("default_branch")
                 .and_then(|b| b.as_str())
                 .unwrap_or(DEFAULT_BRANCH)
                 .to_string())
         },
-
         404 => Err(anyhow!("Repository {}/{} not found (404).", owner, repo)),
         s => {
             let txt = res.text().unwrap_or_default();
@@ -339,11 +335,8 @@ fn download_zip(
     let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
     let filename = format!("{}{}.zip", ARCHIVE_PREFIX, ts.as_nanos());
     let path = dest_dir.join(filename);
-
-    {
-        let mut outfile = File::create(&path)?;
-        io::copy(&mut resp, &mut outfile)?;
-    }
+    let mut outfile = File::create(&path)?;
+    io::copy(&mut resp, &mut outfile)?;
 
     Ok(path)
 }
@@ -361,22 +354,20 @@ fn remove_embedded_git(dirpath: &Path) {
                     {
                         let git_dir = entry.path().to_path_buf();
                         match remove_dir_all(&git_dir) {
-                            Ok(_) => {
-                                println!("Removed embedded .git at {}", git_dir.display());
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "Warning: failed to remove embedded .git at {}: {}",
-                                    git_dir.display(),
-                                    e
-                                );
-                            }
+                            Ok(_) => println!(
+                                "Removed embedded .git at {}",
+                                git_dir.display()
+                            ),
+                            Err(e) => eprintln!(
+                                "Warning: failed to remove embedded .git at \
+                                 {}: {}",
+                                git_dir.display(),
+                                e
+                            ),
                         }
                     }
-                }
-                Err(e) => {
-                    eprintln!("Warning: walker error: {}", e);
-                }
+                },
+                Err(e) => eprintln!("Warning: walker error: {}", e),
             }
             Continue
         })
@@ -403,12 +394,13 @@ fn initialize_repo(
 ) -> anyhow::Result<()> {
     let repo = Repository::init(dest)?;
 
-    // Reuse single Config handle
     if author_name.is_some() || author_email.is_some() {
         let mut cfg = repo.config()?;
+
         if let Some(name) = author_name {
             cfg.set_str("user.name", name)?;
         }
+
         if let Some(email) = author_email {
             cfg.set_str("user.email", email)?;
         }
@@ -417,10 +409,8 @@ fn initialize_repo(
     let mut index = repo.index()?;
     index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
     index.write()?;
-
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
-
     let sig_name = author_name.unwrap_or("gitripper");
     let sig_email = author_email.unwrap_or("gitripper@localhost");
     let signature = Signature::now(sig_name, sig_email)?;
