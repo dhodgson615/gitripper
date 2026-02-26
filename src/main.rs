@@ -1,7 +1,7 @@
 use std::{
     env::var,
     fs::{File, Permissions, create_dir_all, remove_dir_all, set_permissions},
-    io::{self, Cursor, Read, Write, stdin, stdout},
+    io::{self, Cursor, Write, stdin, stdout},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
@@ -41,6 +41,7 @@ const ERR_GIT_NOT_FOUND: i32 = 5;
 const ERR_DOWNLOAD_FAILED: i32 = 6;
 const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
+const PARALLEL_THRESHOLD_BYTES: u64 = 10_485_760; // 10 MB
 
 const fn max_timeout_secs(a: u64, b: u64) -> u64 {
     if a > b { a } else { b }
@@ -274,13 +275,10 @@ fn parse_github_url(url: &str) -> Result<(String, String), &'static str> {
     static RE_GITHUB: Lazy<Regex> =
         Lazy::new(|| Regex::new(RE_GITHUB_PATTERN).unwrap());
 
-    let mut s = url.trim().to_string();
+    let trimmed = url.trim();
+    let stripped = trimmed.strip_suffix(".git").unwrap_or(trimmed);
 
-    if let Some(stripped) = s.strip_suffix(".git") {
-        s = stripped.to_string();
-    }
-
-    if let Some(caps) = RE_GITHUB.captures(&s) {
+    if let Some(caps) = RE_GITHUB.captures(stripped) {
         let owner = caps.get(1).unwrap().as_str().to_string();
         let repo = caps.get(2).unwrap().as_str().to_string();
         Ok((owner, repo))
@@ -356,8 +354,7 @@ fn download_zip(
         } else if status.is_redirection() {
             Err(anyhow!("Unexpected redirect: {}", status))
         } else {
-            let txt = resp.text().unwrap_or_default();
-            Err(anyhow!("Failed to download archive: {} {}", status, txt))
+            Err(anyhow!("Failed to download archive: {}", status))
         };
     }
 
@@ -373,6 +370,16 @@ fn download_zip(
     Ok(path)
 }
 
+#[derive(Debug)]
+struct MemEntry {
+    rel_path:   PathBuf,
+    is_dir:     bool,
+    _data_size: u64,
+    unix_mode:  Option<u32>,
+    _file_idx:  usize,
+    data:       Vec<u8>,
+}
+
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
     let f = File::open(zip_path)?;
     let mmap = unsafe { MmapOptions::new().map(&f)? };
@@ -384,70 +391,50 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
         return Err(anyhow!("Zip archive is empty."));
     }
 
-    let mut in_paths: Vec<PathBuf> = Vec::with_capacity(len);
+    create_dir_all(dest_dir)?;
 
+    let mut entries: Vec<MemEntry> = Vec::with_capacity(len);
+    let mut root_prefix: Option<PathBuf> = None;
+    let mut root_mismatch = false;
+    let mut total_size: u64 = 0;
+
+    // Single pass: detect root prefix, collect entries, and read file data
     for i in 0..len {
-        let file = archive.by_index(i)?;
-        let p = file
+        let mut file = archive.by_index(i)?;
+        let in_path = file
             .enclosed_name()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from(file.name()));
-        in_paths.push(p);
-    }
 
-    let mut candidate: Option<String> = None;
-    let mut all_same = true;
-
-    for p in &in_paths {
-        if let Some(first) = p.components().next() {
-            let s = first.as_os_str().to_string_lossy().into_owned();
-            if s.is_empty() {
-                all_same = false;
-                break;
-            }
-            if let Some(ref c) = candidate {
-                if c != &s {
-                    all_same = false;
-                    break;
+        // Root prefix detection with early short-circuit
+        if !root_mismatch {
+            if let Some(first) = in_path.components().next() {
+                let first_str = first.as_os_str().to_string_lossy();
+                if first_str.is_empty() {
+                    root_mismatch = true;
+                } else if let Some(ref current_prefix) = root_prefix {
+                    if current_prefix.as_os_str() != first.as_os_str() {
+                        root_mismatch = true;
+                    }
+                } else {
+                    root_prefix = Some(PathBuf::from(first.as_os_str()));
                 }
             } else {
-                candidate = Some(s);
+                root_mismatch = true;
             }
-        } else {
-            all_same = false;
-            break;
         }
-    }
 
-    let root_prefix: Option<PathBuf> = if let Some(ref cand) = candidate {
-        if all_same { Some(PathBuf::from(cand)) } else { None }
-    } else {
-        None
-    };
-
-    create_dir_all(dest_dir)?;
-
-    #[derive(Debug)]
-    struct MemEntry {
-        rel_path:  PathBuf,
-        is_dir:    bool,
-        data:      Option<Vec<u8>>,
-        unix_mode: Option<u32>,
-    }
-
-    let mut entries: Vec<MemEntry> = Vec::with_capacity(len);
-    for i in 0..len {
-        let mut file = archive.by_index(i)?;
-
-        let in_path = in_paths
-            .get(i)
-            .cloned()
-            .unwrap_or_else(|| PathBuf::from(file.name()));
-
-        let rel_path = if let Some(ref root) = root_prefix {
-            match in_path.strip_prefix(root) {
-                Ok(p) => p.to_path_buf(),
-                Err(_) => in_path.clone(),
+        let rel_path = if !root_mismatch {
+            if let Some(ref root) = root_prefix {
+                match in_path.strip_prefix(root) {
+                    Ok(p) => p.to_path_buf(),
+                    Err(_) => {
+                        root_mismatch = true;
+                        in_path.clone()
+                    },
+                }
+            } else {
+                in_path.clone()
             }
         } else {
             in_path.clone()
@@ -457,49 +444,64 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> anyhow::Result<()> {
             continue;
         }
 
-        if file.name().ends_with('/') {
-            entries.push(MemEntry {
-                rel_path,
-                is_dir: true,
-                data: None,
-                unix_mode: file.unix_mode(),
-            });
+        let is_dir = file.name().ends_with('/');
+        let unix_mode = file.unix_mode();
+
+        // Read file data in single by_index call
+        let (data_size, data) = if is_dir {
+            (0, Vec::new())
         } else {
-            let mut buf: Vec<u8> = Vec::with_capacity(file.size() as usize);
-            file.read_to_end(&mut buf)?;
-            entries.push(MemEntry {
-                rel_path,
-                is_dir: false,
-                data: Some(buf),
-                unix_mode: file.unix_mode(),
-            });
+            let size = file.size();
+            let mut buf = Vec::with_capacity(size as usize);
+            io::copy(&mut file, &mut buf)?;
+            (size, buf)
+        };
+
+        total_size += data_size;
+
+        entries.push(MemEntry {
+            rel_path,
+            is_dir,
+            _data_size: data_size,
+            unix_mode,
+            _file_idx: i,
+            data,
+        });
+    }
+
+    // Gate parallelism on total size
+    if total_size > PARALLEL_THRESHOLD_BYTES {
+        entries.into_par_iter().try_for_each(
+            |entry| -> anyhow::Result<()> { write_entry(&entry, dest_dir) },
+        )?;
+    } else {
+        for entry in entries {
+            write_entry(&entry, dest_dir)?;
         }
     }
 
-    entries.into_par_iter().try_for_each(|entry| -> anyhow::Result<()> {
-        let outpath = dest_dir.join(&entry.rel_path);
+    Ok(())
+}
 
-        if entry.is_dir {
-            create_dir_all(&outpath)?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                create_dir_all(parent)?;
-            }
-            let mut outfile = File::create(&outpath)?;
-            if let Some(ref data) = entry.data {
-                outfile.write_all(data)?;
-            }
-            #[cfg(unix)]
-            {
-                if let Some(mode) = entry.unix_mode {
-                    let _ =
-                        set_permissions(&outpath, Permissions::from_mode(mode));
-                }
+fn write_entry(entry: &MemEntry, dest_dir: &Path) -> anyhow::Result<()> {
+    let outpath = dest_dir.join(&entry.rel_path);
+
+    if entry.is_dir {
+        create_dir_all(&outpath)?;
+    } else {
+        if let Some(parent) = outpath.parent() {
+            create_dir_all(parent)?;
+        }
+        let mut outfile = File::create(&outpath)?;
+        outfile.write_all(&entry.data)?;
+
+        #[cfg(unix)]
+        {
+            if let Some(mode) = entry.unix_mode {
+                let _ = set_permissions(&outpath, Permissions::from_mode(mode));
             }
         }
-        Ok(())
-    })?;
-
+    }
     Ok(())
 }
 
@@ -558,13 +560,15 @@ fn initialize_repo(
 ) -> anyhow::Result<()> {
     let repo = Repository::init(dest)?;
 
-    if let Some(name) = author_name {
+    // Reuse single Config handle
+    if author_name.is_some() || author_email.is_some() {
         let mut cfg = repo.config()?;
-        cfg.set_str("user.name", name)?;
-    }
-    if let Some(email) = author_email {
-        let mut cfg = repo.config()?;
-        cfg.set_str("user.email", email)?;
+        if let Some(name) = author_name {
+            cfg.set_str("user.name", name)?;
+        }
+        if let Some(email) = author_email {
+            cfg.set_str("user.email", email)?;
+        }
     }
 
     let mut index = repo.index()?;
