@@ -23,7 +23,8 @@ merge_derives = true                      # merge multiple derive attributes int
 
 # Control flow / heuristics
 control_brace_style = "AlwaysSameLine"    # "AlwaysSameLine", "ClosingNextLine", "AlwaysNextLine"
-use_small_heuristics = "Max"              # "Max", "Off", "Default"
+use_small_heuristics = "Off"              # "Max", "Off", "Default"
+fn_single_line = true
 
 # Alignment and spacing
 struct_field_align_threshold = 20         # align struct fields if <= this number of fields
@@ -36,3 +37,16 @@ match_block_trailing_comma = true         # add trailing comma to match blocks
 
 # Misc
 blank_lines_upper_bound = 1               # max blank lines between items
+fn_params_layout = "Tall"                 # "Compressed", "Tall", "MultiLine"
+format_strings = true                     # format string literals
+remove_nested_parens = true               # remove unnecessary nested parentheses
+reorder_modules = true                    # reorder module declarations
+space_before_colon = false                # space before `:` in type annotations
+space_after_colon = true                  # space after `:` in type annotations
+spaces_around_ranges = false              # spaces around `..` and `...`
+match_arm_leading_pipes = "Never"         # "Never", "Always", "Preserve"
+where_single_line = false                 # put where clause on single line if possible
+comment_width = 80                        # max width for comments
+normalize_comments = false                # normalize comment prefixes
+force_explicit_abi = true                 # force explicit ABI in FFI functions
+single_line_if_else_max_width = 80        # max width for single-line if-else expressions
