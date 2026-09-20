@@ -222,7 +222,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
         }
     }
 
-    Ok(dest)
+    Ok(destination)
 }
 
 fn determine_reference(
