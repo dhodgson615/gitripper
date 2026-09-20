@@ -131,8 +131,10 @@ fn run() -> Result<(), i32> {
 
     let mut args = Args::parse();
     let token = args.token.take().or_else(|| var("GITHUB_TOKEN").ok());
-    let url = read_url_from_args(&args)?;
-    let (owner, repo) = parse_github_url(&url).map_err(|_| ERR_INVALID_URL)?;
+    let url: String = read_url_from_args(&args)?;
+
+    let (owner, repo): (String, String) =
+        parse_github_url(&url).map_err(|_| ERR_INVALID_URL)?;
 
     if owner.is_empty() || repo.is_empty() {
         eprintln!("Error: Could not determine repository owner or name.");
