@@ -1,7 +1,7 @@
 use std::{
     env::var,
-    fs::{remove_dir_all, File},
-    io::{self, stdin, stdout, Write},
+    fs::{File, remove_dir_all},
+    io::{self, Write, stdin, stdout},
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     time::{Duration, SystemTime},
