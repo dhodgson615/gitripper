@@ -20,7 +20,7 @@ fn integration_parse_various_github_urls() {
 
 #[test]
 fn integration_reject_invalid_urls() {
-    let invalid_urls = vec![
+    let invalid_urls: Vec<&str> = vec![
         "",
         "not-a-url",
         "https://example.com/user/repo",
