@@ -160,7 +160,7 @@ fn run() -> Result<(), i32> {
         temp_dir.path(),
     )?;
 
-    extract_zip(&zip_path, &dest).map_err(|e| {
+    extract_zip(&zip_path, &destination).map_err(|e| {
         eprintln!("Failed to extract archive: {}", e);
         ERR_EXTRACTION_FAILED
     })?;
