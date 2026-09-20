@@ -21,7 +21,7 @@ fn benchmark_write_small_file(c: &mut Criterion) {
     c.bench_function("write_small_file", |b| {
         b.iter_with_setup(
             || {
-                let temp_dir: TempDir = tempfile::tempdir().unwrap();
+                let temp_dir: TempDir = tempdir().unwrap();
                 (temp_dir.path().to_path_buf(), temp_dir)
             },
             |(path, _temp_dir)| {
