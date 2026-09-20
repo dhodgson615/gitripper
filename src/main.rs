@@ -141,7 +141,7 @@ fn run() -> Result<(), i32> {
         return Err(ERR_INVALID_URL);
     }
 
-    let dest = prepare_destination(&args, &repo)?;
+    let destination: PathBuf = prepare_destination(&args, &repo)?;
     check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
 
     let client = get_client();
