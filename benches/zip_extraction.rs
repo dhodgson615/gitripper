@@ -40,7 +40,9 @@ fn benchmark_write_medium_file(c: &mut Criterion) {
                 (temp_dir.path().to_path_buf(), temp_dir)
             },
             |(path, _temp_dir)| {
-                let entry: MemEntry = create_test_entry(1024 * 1024, "medium.bin"); // 1 MB
+                let entry: MemEntry =
+                    create_test_entry(1024 * 1024, "medium.bin"); // 1 MB
+
                 let _ = write_entry(black_box(&entry), black_box(&path));
             },
         )
