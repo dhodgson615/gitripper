@@ -314,7 +314,7 @@ fn download_zip(
     token: Option<&str>,
     dest_dir: &Path,
 ) -> anyhow::Result<PathBuf> {
-    let url = format!(
+    let url: String = format!(
         "https://api.github.com/repos/{}/{}/zipball/{}",
         owner, repo, reference
     );
