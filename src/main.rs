@@ -1,23 +1,26 @@
 use std::{
     env::var,
     fs::{File, remove_dir_all},
-    io::{self, Write, stdin, stdout},
+    io::{self, Write, copy, stdin, stdout},
     path::{Path, PathBuf},
     process::{Command, Stdio, exit},
     time::{Duration, SystemTime},
 };
 
+use WalkState::Continue;
 use anyhow::anyhow;
 use clap::Parser;
-use git2::{IndexAddOption, Repository, Signature};
+use git2::{Config, Index, IndexAddOption, Oid, Repository, Signature, Tree};
 use gitripper::{extract_zip, parse_github_url};
 use ignore::{DirEntry, Error, WalkBuilder, WalkState};
 use once_cell::sync::Lazy;
-use phf::{phf_map, Map};
-use reqwest::blocking::Client;
+use phf::{Map, phf_map};
+use reqwest::{
+    StatusCode,
+    blocking::{Client, RequestBuilder, Response},
+};
 use serde_json::Value;
-use tempfile::tempdir;
-use WalkState::Continue;
+use tempfile::{TempDir, tempdir};
 
 const DEFAULT_BRANCH: &str = "main";
 const DEFAULT_COMMIT_MESSAGE: &str = "Initial commit";
@@ -281,14 +284,14 @@ fn get_default_branch(
     let mut request: RequestBuilder = client.get(&url);
 
     if let Some(t) = token {
-        req = req.header("Authorization", format!("token {}", t));
+        request = request.header("Authorization", format!("token {}", t));
     }
 
-    let res = req.timeout(TIMEOUT_GET_REPO).send()?;
+    let response: Response = request.timeout(TIMEOUT_GET_REPO).send()?;
 
-    match res.status().as_u16() {
+    match response.status().as_u16() {
         200 => {
-            let v: Value = res.json()?;
+            let v: Value = response.json()?;
             Ok(v.get("default_branch")
                 .and_then(|b| b.as_str())
                 .unwrap_or(DEFAULT_BRANCH)
@@ -296,8 +299,8 @@ fn get_default_branch(
         },
         404 => Err(anyhow!("Repository {}/{} not found (404).", owner, repo)),
         s => {
-            let txt = res.text().unwrap_or_default();
-            Err(anyhow!("Failed to get repo info: {} {}", s, txt))
+            let text: String = response.text().unwrap_or_default();
+            Err(anyhow!("Failed to get repo info: {} {}", s, text))
         },
     }
 }
@@ -316,14 +319,15 @@ fn download_zip(
         owner, repo, reference
     );
 
-    let mut req = client.get(&url).header("Accept", ACCEPT_HEADER);
+    let mut request: RequestBuilder =
+        client.get(&url).header("Accept", ACCEPT_HEADER);
 
     if let Some(t) = token {
-        req = req.header("Authorization", format!("token {}", t));
+        request = request.header("Authorization", format!("token {}", t));
     }
 
-    let mut resp = req.timeout(TIMEOUT_DOWNLOAD).send()?;
-    let status = resp.status();
+    let mut response: Response = request.timeout(TIMEOUT_DOWNLOAD).send()?;
+    let status: StatusCode = response.status();
 
     if !status.is_success() {
         return if status.as_u16() == 404 {
@@ -340,27 +344,30 @@ fn download_zip(
         };
     }
 
-    let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-    let filename = format!("{}{}.zip", ARCHIVE_PREFIX, ts.as_nanos());
-    let path = dest_dir.join(filename);
-    let mut outfile = File::create(&path)?;
-    io::copy(&mut resp, &mut outfile)?;
-
+    let t: Duration =
+        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let filename: String = format!("{}{}.zip", ARCHIVE_PREFIX, t.as_nanos());
+    let path: PathBuf = dest_dir.join(filename);
+    let mut outfile: File = File::create(&path)?;
+    copy(&mut response, &mut outfile)?;
     Ok(path)
 }
 
 fn remove_embedded_git(dirpath: &Path) {
-    let mut builder = WalkBuilder::new(dirpath);
+    let mut builder: WalkBuilder = WalkBuilder::new(dirpath);
     builder.standard_filters(false).hidden(false);
 
     builder.build_parallel().run(|| {
-        Box::new(|res: Result<DirEntry, Error>| {
-            match res {
+        Box::new(|response: Result<DirEntry, Error>| {
+            match response {
                 Ok(entry) => {
-                    if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                    if entry
+                        .file_type()
+                        .map(|file_type| file_type.is_dir())
+                        .unwrap_or(false)
                         && entry.file_name() == ".git"
                     {
-                        let git_dir = entry.path().to_path_buf();
+                        let git_dir: PathBuf = entry.path().to_path_buf();
                         match remove_dir_all(&git_dir) {
                             Ok(_) => println!(
                                 "Removed embedded .git at {}",
@@ -400,28 +407,28 @@ fn initialize_repo(
     author_email: Option<&str>,
     remote: Option<&str>,
 ) -> anyhow::Result<()> {
-    let repo = Repository::init(dest)?;
+    let repo: Repository = Repository::init(dest)?;
 
     if author_name.is_some() || author_email.is_some() {
-        let mut cfg = repo.config()?;
+        let mut config: Config = repo.config()?;
 
         if let Some(name) = author_name {
-            cfg.set_str("user.name", name)?;
+            config.set_str("user.name", name)?;
         }
 
         if let Some(email) = author_email {
-            cfg.set_str("user.email", email)?;
+            config.set_str("user.email", email)?;
         }
     }
 
-    let mut index = repo.index()?;
+    let mut index: Index = repo.index()?;
     index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
     index.write()?;
-    let tree_id = index.write_tree()?;
-    let tree = repo.find_tree(tree_id)?;
-    let sig_name = author_name.unwrap_or("gitripper");
-    let sig_email = author_email.unwrap_or("gitripper@localhost");
-    let signature = Signature::now(sig_name, sig_email)?;
+    let tree_id: Oid = index.write_tree()?;
+    let tree: Tree = repo.find_tree(tree_id)?;
+    let sig_name: &str = author_name.unwrap_or("gitripper");
+    let sig_email: &str = author_email.unwrap_or("gitripper@localhost");
+    let signature: Signature = Signature::now(sig_name, sig_email)?;
 
     repo.commit(
         Some("HEAD"),
