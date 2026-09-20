@@ -129,7 +129,9 @@ fn benchmark_write_various_sizes(c: &mut Criterion) {
                         (temp_dir.path().to_path_buf(), temp_dir)
                     },
                     |(path, _temp_dir)| {
-                        let entry: MemEntry = create_test_entry(size, "test.bin");
+                        let entry: MemEntry =
+                            create_test_entry(size, "test.bin");
+
                         let _ =
                             write_entry(black_box(&entry), black_box(&path));
                     },
