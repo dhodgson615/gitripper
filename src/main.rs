@@ -218,7 +218,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
         }
 
         if args.force {
-            remove_dir_all(&dest).map_err(|_| ERR_CLEANUP_FAILED)?;
+            remove_dir_all(&destination).map_err(|_| ERR_CLEANUP_FAILED)?;
         }
     }
 
