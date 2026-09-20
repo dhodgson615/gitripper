@@ -144,7 +144,7 @@ fn run() -> Result<(), i32> {
     let destination: PathBuf = prepare_destination(&args, &repo)?;
     check_git_installed().map_err(|_| ERR_GIT_NOT_FOUND)?;
 
-    let client = get_client();
+    let client: &Client = get_client();
 
     let reference =
         determine_reference(&args, &client, &owner, &repo, token.as_deref());
