@@ -157,7 +157,7 @@ fn run() -> Result<(), i32> {
         &repo,
         &reference,
         token.as_deref(),
-        tmp.path(),
+        temp_dir.path(),
     )?;
 
     extract_zip(&zip_path, &dest).map_err(|e| {
