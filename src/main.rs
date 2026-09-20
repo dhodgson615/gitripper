@@ -165,7 +165,7 @@ fn run() -> Result<(), i32> {
         ERR_EXTRACTION_FAILED
     })?;
 
-    remove_embedded_git(&dest);
+    remove_embedded_git(&destination);
     println!("Initializing new git repository...");
 
     initialize_repo(
