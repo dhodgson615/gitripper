@@ -197,7 +197,7 @@ fn read_url_from_args(args: &Args) -> Result<String, i32> {
 }
 
 fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
-    let dest = args
+    let destination: PathBuf = args
         .dest
         .clone()
         .unwrap_or_else(|| PathBuf::from(format!("{}-copy", repo)));
