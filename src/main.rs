@@ -38,11 +38,7 @@ const ERR_EXTRACTION_FAILED: i32 = 7;
 const ERR_INIT_FAILED: i32 = 8;
 
 const fn max_timeout_secs(a: u64, b: u64) -> u64 {
-    if a > b {
-        a
-    } else {
-        b
-    }
+    if a > b { a } else { b }
 }
 const MAX_TIMEOUT_SECS: u64 =
     max_timeout_secs(TIMEOUT_GET_REPO_SECS, TIMEOUT_DOWNLOAD_SECS);
