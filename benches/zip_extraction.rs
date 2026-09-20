@@ -125,7 +125,7 @@ fn benchmark_write_various_sizes(c: &mut Criterion) {
             |b, &size| {
                 b.iter_with_setup(
                     || {
-                        let temp_dir = tempdir().unwrap();
+                        let temp_dir: TempDir = tempdir().unwrap();
                         (temp_dir.path().to_path_buf(), temp_dir)
                     },
                     |(path, _temp_dir)| {
