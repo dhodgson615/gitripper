@@ -4,6 +4,7 @@ use criterion::{
     BenchmarkId, Criterion, black_box, criterion_group, criterion_main,
 };
 use gitripper::{MemEntry, write_entry};
+use tempfile::{TempDir, tempdir};
 
 fn create_test_entry(size: usize, name: &str) -> MemEntry {
     MemEntry {
