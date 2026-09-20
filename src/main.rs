@@ -212,7 +212,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
             eprintln!(
                 "Destination '{}' exists and is not empty. Use --force to \
                  overwrite.",
-                dest.display()
+                destination.display()
             );
             return Err(ERR_DEST_EXISTS);
         }
