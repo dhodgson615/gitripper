@@ -67,7 +67,9 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
         .expect("failed to build global HTTP client")
 });
 
-fn get_client() -> &'static Client { &HTTP_CLIENT }
+fn get_client() -> &'static Client {
+    &HTTP_CLIENT
+}
 
 fn touch_compile_items() {
     let _ = max_timeout_secs(1u64, 2u64);
