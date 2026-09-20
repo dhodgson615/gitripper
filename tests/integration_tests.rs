@@ -39,7 +39,7 @@ fn integration_reject_invalid_urls() {
 
 #[test]
 fn integration_parse_github_url_with_special_chars() {
-    let urls = vec![
+    let urls: Vec<(&str, &str, &str)> = vec![
         ("https://github.com/user-name/repo-name", "user-name", "repo-name"),
         ("https://github.com/user_123/repo_test", "user_123", "repo_test"),
     ];
