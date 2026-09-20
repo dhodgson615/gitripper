@@ -14,7 +14,7 @@ fn integration_parse_various_github_urls() {
     ];
 
     for (url, expected_owner, expected_repo) in test_cases {
-        let (owner, repo) = parse_github_url(url)
+        let (owner, repo): (String, String) = parse_github_url(url)
             .unwrap_or_else(|_| panic!("Failed to parse URL: {}", url));
 
         assert_eq!(owner, expected_owner);
