@@ -151,7 +151,7 @@ fn run() -> Result<(), i32> {
 
     let temp_dir: TempDir = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
 
-    let zip_path = download_archive(
+    let zip_path: PathBuf = download_archive(
         &client,
         &owner,
         &repo,
