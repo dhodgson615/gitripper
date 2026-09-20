@@ -277,8 +277,8 @@ fn get_default_branch(
     repo: &str,
     token: Option<&str>,
 ) -> anyhow::Result<String> {
-    let url = format!("{}/repos/{}/{}", GITHUB_API, owner, repo);
-    let mut req = client.get(&url);
+    let url: String = format!("{}/repos/{}/{}", GITHUB_API, owner, repo);
+    let mut request: RequestBuilder = client.get(&url);
 
     if let Some(t) = token {
         req = req.header("Authorization", format!("token {}", t));
