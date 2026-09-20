@@ -57,7 +57,9 @@ fn benchmark_write_large_file(c: &mut Criterion) {
                 (temp_dir.path().to_path_buf(), temp_dir)
             },
             |(path, _temp_dir)| {
-                let entry: MemEntry = create_test_entry(10 * 1024 * 1024, "large.bin"); // 10 MB
+                let entry: MemEntry =
+                    create_test_entry(10 * 1024 * 1024, "large.bin"); // 10 MB
+
                 let _ = write_entry(black_box(&entry), black_box(&path));
             },
         )
