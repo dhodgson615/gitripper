@@ -169,7 +169,7 @@ fn run() -> Result<(), i32> {
     println!("Initializing new git repository...");
 
     initialize_repo(
-        &dest,
+        &destination,
         args.author_name.as_deref(),
         args.author_email.as_deref(),
         args.remote.as_deref(),
