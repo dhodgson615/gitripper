@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
+    BenchmarkId, Criterion, black_box, criterion_group, criterion_main,
 };
 use gitripper::{write_entry, MemEntry};
 
