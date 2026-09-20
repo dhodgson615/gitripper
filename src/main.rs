@@ -203,7 +203,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
         .unwrap_or_else(|| PathBuf::from(format!("{}-copy", repo)));
 
     if destination.exists() {
-        let not_empty = destination
+        let not_empty: bool = destination
             .read_dir()
             .map(|mut rd| rd.next().is_some())
             .unwrap_or(false);
