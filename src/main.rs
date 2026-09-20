@@ -146,7 +146,7 @@ fn run() -> Result<(), i32> {
 
     let client: &Client = get_client();
 
-    let reference =
+    let reference: String =
         determine_reference(&args, &client, &owner, &repo, token.as_deref());
 
     let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
