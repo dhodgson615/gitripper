@@ -45,7 +45,7 @@ fn integration_parse_github_url_with_special_chars() {
     ];
 
     for (url, expected_owner, expected_repo) in urls {
-        let (owner, repo) = parse_github_url(url).unwrap();
+        let (owner, repo): (String, String) = parse_github_url(url).unwrap();
         assert_eq!(owner, expected_owner);
         assert_eq!(repo, expected_repo);
     }
