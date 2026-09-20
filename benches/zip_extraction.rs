@@ -113,7 +113,8 @@ fn benchmark_write_directory(c: &mut Criterion) {
 }
 
 fn benchmark_write_various_sizes(c: &mut Criterion) {
-    let mut group = c.benchmark_group("write_various_sizes");
+    let mut group: BenchmarkGroup<WallTime> =
+        c.benchmark_group("write_various_sizes");
 
     for size in
         [1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024].iter()
