@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use criterion::{
-    BenchmarkId, Criterion, black_box, criterion_group, criterion_main,
+    BenchmarkGroup, BenchmarkId, Criterion, black_box, criterion_group,
+    criterion_main, measurement::WallTime,
 };
 use gitripper::{MemEntry, write_entry};
 use tempfile::{TempDir, tempdir};
