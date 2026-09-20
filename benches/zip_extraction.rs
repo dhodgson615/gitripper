@@ -84,6 +84,7 @@ fn benchmark_write_nested_file(c: &mut Criterion) {
                     _file_idx:  0,
                     data:       vec![42; 1024],
                 };
+
                 let _ = write_entry(black_box(&entry), black_box(&path));
             },
         )
