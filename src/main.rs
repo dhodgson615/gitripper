@@ -205,7 +205,7 @@ fn prepare_destination(args: &Args, repo: &str) -> Result<PathBuf, i32> {
     if destination.exists() {
         let not_empty: bool = destination
             .read_dir()
-            .map(|mut rd| rd.next().is_some())
+            .map(|mut read_dir| read_dir.next().is_some())
             .unwrap_or(false);
 
         if not_empty && !args.force {
