@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use criterion::{
     BenchmarkId, Criterion, black_box, criterion_group, criterion_main,
 };
-use gitripper::{write_entry, MemEntry};
+use gitripper::{MemEntry, write_entry};
 
 fn create_test_entry(size: usize, name: &str) -> MemEntry {
     MemEntry {
