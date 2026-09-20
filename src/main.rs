@@ -3,7 +3,7 @@ use std::{
     fs::{File, remove_dir_all},
     io::{self, Write, stdin, stdout},
     path::{Path, PathBuf},
-    process::{exit, Command, Stdio},
+    process::{Command, Stdio, exit},
     time::{Duration, SystemTime},
 };
 
