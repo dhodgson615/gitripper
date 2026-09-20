@@ -179,7 +179,7 @@ fn run() -> Result<(), i32> {
         ERR_INIT_FAILED
     })?;
 
-    println!("Done. Repository copied to: {}", dest.display());
+    println!("Done. Repository copied to: {}", destination.display());
     println!("Note: this repository has no history from the original repo.");
     Ok(())
 }
