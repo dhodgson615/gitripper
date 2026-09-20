@@ -149,7 +149,7 @@ fn run() -> Result<(), i32> {
     let reference: String =
         determine_reference(&args, &client, &owner, &repo, token.as_deref());
 
-    let tmp = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
+    let temp_dir: TempDir = tempdir().map_err(|_| ERR_DOWNLOAD_FAILED)?;
 
     let zip_path = download_archive(
         &client,
