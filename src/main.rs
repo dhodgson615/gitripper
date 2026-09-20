@@ -346,6 +346,7 @@ fn download_zip(
 
     let t: Duration =
         SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+
     let filename: String = format!("{}{}.zip", ARCHIVE_PREFIX, t.as_nanos());
     let path: PathBuf = dest_dir.join(filename);
     let mut outfile: File = File::create(&path)?;
